@@ -466,8 +466,7 @@ makeLabel(dupePage, "What to Transfer")
 local _, getStructures = makeToggle(dupePage, "Structures",      false)
 local _, getFurniture  = makeToggle(dupePage, "Furniture",       false)
 local _, getTrucks     = makeToggle(dupePage, "Trucks + Cargo",  false)
-local _, getItems      = makeToggle(dupePage, "Purchased Items", false)
-local _, getGifs       = makeToggle(dupePage, "Gif Items",       false)
+local _, getGifs       = makeToggle(dupePage, "Gift/Items",      false)
 local _, getWood       = makeToggle(dupePage, "Wood",            false)
 
 makeSep(dupePage)
@@ -476,14 +475,13 @@ makeLabel(dupePage, "Progress")
 local progStructures, setProgStructures, resetProgStructures = makeProgressBar(dupePage, "Structures")
 local progFurniture,  setProgFurniture,  resetProgFurniture  = makeProgressBar(dupePage, "Furniture")
 local progTrucks,     setProgTrucks,     resetProgTrucks     = makeProgressBar(dupePage, "Trucks + Cargo")
-local progItems,      setProgItems,      resetProgItems      = makeProgressBar(dupePage, "Purchased Items")
-local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gif Items")
+local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gift/Items")
 local progWood,       setProgWood,       resetProgWood       = makeProgressBar(dupePage, "Wood")
 
 makeSep(dupePage)
 
-local runBtn  = makeBtn(dupePage, "▶  Run Butter Dupe",  Color3.fromRGB(35, 65, 35),  function() end)
-local stopBtn = makeBtn(dupePage, "■  Stop",              Color3.fromRGB(65, 25, 25),  function() end)
+local runBtn  = makeBtn(dupePage, "Start", Color3.fromRGB(55, 55, 65), function() end)
+local stopBtn = makeBtn(dupePage, "Stop",  Color3.fromRGB(55, 55, 65), function() end)
 
 -- ── LOGIC ─────────────────────────────────────────────────────────────────────
 local butterRunning = false
@@ -491,7 +489,7 @@ local butterThread  = nil
 
 local function resetAllProgress()
     resetProgStructures(); resetProgFurniture(); resetProgTrucks()
-    resetProgItems();      resetProgGifs();      resetProgWood()
+    resetProgGifs();       resetProgWood()
 end
 
 stopBtn.MouseButton1Click:Connect(function()
@@ -799,40 +797,10 @@ runBtn.MouseButton1Click:Connect(function()
             end
             seekNetOwn(part)
             for i = 1, 200 do part.CFrame = Offset end
-            task.wait(0.2)
+            task.wait(0.8)
         end
 
-        -- ── PURCHASED ITEMS ───────────────────────────────────────────────────
-        if getItems() and butterRunning then
-            local total = countItems(function(p)
-                return p:FindFirstChild("PurchasedBoxItemName")
-                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
-            end)
-            if total > 0 then
-                progItems.Visible = true; setProgItems(0, total)
-                setStatus("Sending purchased items...", true)
-                local done = 0
-                pcall(function()
-                    for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not butterRunning then break end
-                        if v.Name == "Owner" and tostring(v.Value) == giverName then
-                            local p = v.Parent
-                            if p:FindFirstChild("PurchasedBoxItemName") then
-                                local part = p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")
-                                if not part then continue end
-                                local PCF  = (p:FindFirstChild("Main") and p.Main.CFrame) or p:FindFirstChildOfClass("Part").CFrame
-                                local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                                sendItem(part, CFrame.new(nPos) * PCF.Rotation)
-                                done += 1; setProgItems(done, total)
-                            end
-                        end
-                    end
-                end)
-                setProgItems(total, total)
-            end
-        end
-
-        -- ── GIF ITEMS ─────────────────────────────────────────────────────────
+        -- ── GIFT/ITEMS ────────────────────────────────────────────────────────
         if getGifs() and butterRunning then
             local total = countItems(function(p)
                 return p:FindFirstChildOfClass("Script") and p:FindFirstChild("DraggableItem")
@@ -840,7 +808,7 @@ runBtn.MouseButton1Click:Connect(function()
             end)
             if total > 0 then
                 progGifs.Visible = true; setProgGifs(0, total)
-                setStatus("Sending gif items...", true)
+                setStatus("Sending gift/items...", true)
                 local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
