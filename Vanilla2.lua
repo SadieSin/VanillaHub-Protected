@@ -4,8 +4,7 @@
 -- ════════════════════════════════════════════════════
 
 if not _G.VH then
-    warn("[VanillaHub] Vanilla2: _G.VH not found. Execute Vanilla1 first.")
-    return
+    _G.VH = { butter = { running = false } }
 end
 
 print("[VanillaHub] Vanilla2 loaded")
