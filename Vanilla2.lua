@@ -171,7 +171,34 @@ end)
 -- BUTTER LEAK TAB
 -- Pulled from PinkHub v2 and integrated into VanillaHub
 -- ════════════════════════════════════════════════════
-local butterPage = pages["ButterTab"]
+
+-- butterPage is whatever container Vanilla1 registered (Frame, ScrollingFrame, etc.)
+-- We create our own inner ScrollingFrame so elements stack correctly regardless.
+local butterPageRaw = pages["ButterTab"]
+
+local butterScroll = Instance.new("ScrollingFrame")
+butterScroll.Size                = UDim2.new(1, 0, 1, 0)
+butterScroll.BackgroundTransparency = 1
+butterScroll.BorderSizePixel     = 0
+butterScroll.ScrollBarThickness  = 3
+butterScroll.ScrollBarImageColor3 = Color3.fromRGB(200, 70, 140)
+butterScroll.CanvasSize          = UDim2.new(0, 0, 0, 0)
+butterScroll.Parent              = butterPageRaw
+
+local butterLayout = Instance.new("UIListLayout", butterScroll)
+butterLayout.Padding              = UDim.new(0, 5)
+butterLayout.HorizontalAlignment  = Enum.HorizontalAlignment.Center
+butterLayout.SortOrder            = Enum.SortOrder.LayoutOrder
+butterLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    butterScroll.CanvasSize = UDim2.new(0, 0, 0, butterLayout.AbsoluteContentSize.Y + 18)
+end)
+
+local butterPad = Instance.new("UIPadding", butterScroll)
+butterPad.PaddingTop    = UDim.new(0, 8)
+butterPad.PaddingBottom = UDim.new(0, 10)
+
+-- All butter UI elements parent to butterScroll (the scroll frame), not the raw page
+local butterPage = butterScroll
 
 -- ── Cargo Teleport System v2 ─────────────────────────────
 -- Constants
