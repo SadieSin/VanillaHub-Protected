@@ -595,6 +595,35 @@ table.insert(cleanupTasks, function()
     resetAllDupeProgress()
 end)
 
+-- ── Shared smooth-truck-lerp helper ─────────────────────────────────────────
+-- Smoothly moves `tModel` from its current CFrame to `destCF` over `duration`
+-- seconds using a cubic ease-out. Blocks the calling coroutine until done.
+local function smoothMoveTruck(tModel, destCF, duration)
+    duration = duration or 1.5
+    local startCF  = tModel:GetPrimaryPartCFrame()
+    local startT   = tick()
+    local lerpDone = false
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        local t    = math.clamp((tick() - startT) / duration, 0, 1)
+        local ease = 1 - (1 - t) ^ 3  -- cubic ease-out
+        pcall(function()
+            tModel:SetPrimaryPartCFrame(startCF:Lerp(destCF, ease))
+        end)
+        if t >= 1 then
+            conn:Disconnect()
+            lerpDone = true
+        end
+    end)
+    -- Wait for the lerp to finish (cap at duration + 0.5s safety margin)
+    local deadline = tick() + duration + 0.5
+    while not lerpDone and tick() < deadline do
+        task.wait()
+    end
+    pcall(function() conn:Disconnect() end)
+end
+-- ────────────────────────────────────────────────────────────────────────────
+
 createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
     if _G.VH.butter.running then setDupeStatus("Already running!", true) return end
     local giverName    = getGiverName()
@@ -770,7 +799,10 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
                         end
                     end
 
-                    tModel:SetPrimaryPartCFrame(truckDestCF)
+                    -- ── Smooth truck movement (1.5 s, cubic ease-out) ────────────
+                    setDupeStatus("Moving truck smoothly...", true)
+                    smoothMoveTruck(tModel, truckDestCF, 1.5)
+                    -- ─────────────────────────────────────────────────────────────
 
                     local SitPart = Char.Humanoid.SeatPart
                     local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
@@ -1002,12 +1034,6 @@ end)
 
 -- ════════════════════════════════════════════════════
 -- SINGLE TRUCK TELEPORT
--- How it works:
---   1. Select Giver and Receiver players from dropdowns
---   2. The Giver must be sitting in a truck on their base
---   3. Press "Teleport My Truck" — it teleports the truck
---      (and any cargo including wood) to the receiver's base.
---      Empty trucks are teleported even with no cargo.
 -- ════════════════════════════════════════════════════
 createDSep()
 createDSection("Single Truck Teleport")
@@ -1106,8 +1132,7 @@ createDBtn("Teleport My Truck", Color3.fromRGB(60,40,100), function()
             return math.abs(r.X)<=boxSize.X/2 and math.abs(r.Y)<=boxSize.Y/2+2 and math.abs(r.Z)<=boxSize.Z/2
         end
 
-        -- Sweep cargo inside truck bounding box:
-        -- includes wood (WoodSection / TreeClass Main) AND normal cargo (Main)
+        -- Sweep cargo inside truck bounding box
         local mCF, mSz = tModel:GetBoundingBox()
         for _, part in ipairs(workspace:GetDescendants()) do
             if part:IsA("BasePart") and not ignoredParts[part]
@@ -1126,8 +1151,10 @@ createDBtn("Teleport My Truck", Color3.fromRGB(60,40,100), function()
             end
         end
 
-        -- Teleport the truck itself (while still seated — same as full dupe)
-        tModel:SetPrimaryPartCFrame(truckDestCF)
+        -- ── Smooth truck movement (1.5 s, cubic ease-out) ────────────────────
+        setSTStatus("Moving truck smoothly...", true)
+        smoothMoveTruck(tModel, truckDestCF, 1.5)
+        -- ─────────────────────────────────────────────────────────────────────
 
         -- Get door hinge for exit
         local DoorHinge = seatPart.Parent:FindFirstChild("PaintParts")
