@@ -1,16 +1,9 @@
 -- VanillaHub Protected Loader
 local KEY = getgenv().VHKey
-local Players = game:GetService("Players")
-local LP = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+local LP = game:GetService("Players").LocalPlayer
 
 local function fetch(url)
-    local ok, result = pcall(function()
-        return game:HttpGet(url, true)
-    end)
-    if ok and result then
-        return result
-    end
-    return nil
+    return game:HttpGet(url)
 end
 
 -- No key provided
@@ -21,62 +14,9 @@ end
 
 -- Fetch keys
 local success, keyData = pcall(fetch, "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/keys.txt")
-if not success or not keyData then
+if not success then
     LP:Kick("❌ VanillaHub: Could not reach key server. Try again.")
     return
-end
-
--- Fetch admin perm keys
-local adminSuccess, adminData = pcall(fetch, "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/admin.txt")
-
--- Check if admin perm key
-local isAdmin = false
-if adminSuccess and adminData then
-    for line in adminData:gmatch("[^\n]+") do
-        if line:gsub("%s+", "") == KEY:gsub("%s+", "") then
-            isAdmin = true
-            break
-        end
-    end
-end
-
--- If admin skip all checks and load
-if isAdmin then
-    local sg = Instance.new("ScreenGui", game.CoreGui)
-    sg.Name = "VHAdminNotice"
-    sg.ResetOnSpawn = false
-    local f = Instance.new("Frame", sg)
-    f.Size = UDim2.new(0, 420, 0, 100)
-    f.Position = UDim2.new(0.5, -210, 0.5, -50)
-    f.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-    f.BackgroundTransparency = 0.15
-    f.BorderSizePixel = 0
-    Instance.new("UICorner", f).CornerRadius = UDim.new(0, 14)
-    local stroke = Instance.new("UIStroke", f)
-    stroke.Color = Color3.fromRGB(50, 190, 50)
-    stroke.Thickness = 1.5
-    stroke.Transparency = 0.4
-    local title = Instance.new("TextLabel", f)
-    title.Size = UDim2.new(1, 0, 0, 50)
-    title.Position = UDim2.new(0, 0, 0, 10)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 20
-    title.TextColor3 = Color3.fromRGB(50, 255, 50)
-    title.Text = "👑  Admin Key Detected"
-    local sub = Instance.new("TextLabel", f)
-    sub.Size = UDim2.new(1, -30, 0, 30)
-    sub.Position = UDim2.new(0, 15, 0, 58)
-    sub.BackgroundTransparency = 1
-    sub.Font = Enum.Font.Gotham
-    sub.TextSize = 14
-    sub.TextColor3 = Color3.fromRGB(180, 255, 180)
-    sub.Text = "Welcome back! Loading VanillaHub..."
-    sub.TextXAlignment = Enum.TextXAlignment.Left
-    task.delay(4, function()
-        if sg and sg.Parent then sg:Destroy() end
-    end)
-    goto loadScripts
 end
 
 -- Fetch expired keys
@@ -194,9 +134,7 @@ if game.PlaceId ~= 13822889 then
     return
 end
 
-::loadScripts::
-
--- Load scripts silently
+-- Key valid + correct game — load scripts silently
 local vanillaScripts = {
     "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla1.lua",
     "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla2.lua",
