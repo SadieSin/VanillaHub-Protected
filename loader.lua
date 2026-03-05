@@ -3,7 +3,13 @@ local KEY = getgenv().VHKey
 local LP = game:GetService("Players").LocalPlayer
 
 local function fetch(url)
-    return game:HttpGet(url)
+    local ok, result = pcall(function()
+        return game:HttpGet(url, true)
+    end)
+    if ok and result then
+        return result
+    end
+    return nil
 end
 
 -- No key provided
@@ -14,7 +20,7 @@ end
 
 -- Fetch keys
 local success, keyData = pcall(fetch, "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/keys.txt")
-if not success then
+if not success or not keyData then
     LP:Kick("❌ VanillaHub: Could not reach key server. Try again.")
     return
 end
@@ -69,7 +75,6 @@ if isAdmin then
     task.delay(4, function()
         if sg and sg.Parent then sg:Destroy() end
     end)
-    -- Skip straight to loading
     goto loadScripts
 end
 
