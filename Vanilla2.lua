@@ -577,78 +577,72 @@ runBtn.MouseButton1Click:Connect(function()
                     end
                 end
 
-                -- ── Phase 2: Retry missed cargo up to 25 times ─
-                -- After ALL trucks are done, return to giver's plot
-                -- and keep retrying any cargo that didn't land.
-                task.wait(5)
+                -- ── Phase 2: Retry missed cargo (up to 25 attempts) ──
+                -- After ALL trucks are done, loop back to the giver's plot
+                -- and keep retrying any cargo that didn't move, up to 25 times.
+                task.wait(1)
+
+                local retryList = {}
+                for _, data in ipairs(teleportedParts) do
+                    if data.Instance and data.Instance.Parent
+                        and (data.Instance.Position - data.OldPos).Magnitude < 5 then
+                        ignoredParts[data.Instance] = nil
+                        table.insert(retryList, data)
+                    end
+                end
 
                 local cargoTotal = #teleportedParts
+                local cargoDone  = cargoTotal - #retryList
                 if cargoTotal > 0 then
                     progTrucks.Visible = true
+                    setProgTrucks(cargoDone, cargoTotal)
+                end
 
-                    local function getMissedCargo()
-                        local missed = {}
-                        for _, data in ipairs(teleportedParts) do
-                            if data.Instance and data.Instance.Parent then
-                                local dist = (data.Instance.Position - data.TargetCFrame.Position).Magnitude
-                                if dist > 8 then
-                                    table.insert(missed, data)
-                                end
-                            end
+                local MAX_TRIES = 25
+                local attempt   = 0
+
+                repeat
+                    task.wait(1)
+                    retryList = {}
+                    for _, data in ipairs(teleportedParts) do
+                        if data.Instance and data.Instance.Parent
+                            and (data.Instance.Position - data.OldPos).Magnitude < 25 then
+                            table.insert(retryList, data)
                         end
-                        return missed
                     end
 
-                    local attempt    = 0
-                    local MAX_TRIES  = 25
-                    local missedList = getMissedCargo()
-
-                    while #missedList > 0 and butterRunning and attempt < MAX_TRIES do
+                    if #retryList > 0 and butterRunning then
                         attempt += 1
-                        local cargoDone = cargoTotal - #missedList
-                        setProgTrucks(cargoDone, cargoTotal)
-                        setStatus2(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList))
+                        setStatus2(string.format("Retry %d/%d — %d cargo left...", attempt, MAX_TRIES, #retryList))
 
-                        -- Warp back to giver's plot origin to get close to missed items
+                        -- Warp back to giver's plot so we are near the missed parts
                         Char.HumanoidRootPart.CFrame = CFrame.new(GiveBaseOrigin.Position + Vector3.new(0, 5, 0))
-                        task.wait(0.5)
+                        task.wait(0.3)
 
-                        for _, data in ipairs(missedList) do
+                        for _, data in ipairs(retryList) do
                             if not butterRunning then break end
                             local item = data.Instance
                             if not (item and item.Parent) then continue end
-
-                            -- Walk close enough to grab it
-                            local attempts = 0
-                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and attempts < 10 do
-                                Char.HumanoidRootPart.CFrame = item.CFrame
-                                task.wait(0.1)
-                                attempts += 1
+                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 do
+                                Char.HumanoidRootPart.CFrame = item.CFrame; task.wait(0.1)
                             end
-
                             RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-                            task.wait(0.1)
+                            task.wait(0.6)
                             item.CFrame = data.TargetCFrame
-                            task.wait(0.1)
+                            cargoDone = cargoTotal - #retryList
+                            setProgTrucks(cargoDone, cargoTotal)
                         end
-
-                        task.wait(3)
-                        missedList = getMissedCargo()
                     end
+                until #retryList == 0 or not butterRunning or attempt >= MAX_TRIES
 
-                    local finalDone = cargoTotal - #missedList
-                    setProgTrucks(finalDone, cargoTotal)
-
-                    if #missedList == 0 then
-                        setStatus2("✓ All cargo teleported! ♡")
-                    else
-                        setStatus2(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList))
-                    end
-
-                    task.wait(1)
+                if #retryList > 0 then
+                    setStatus2(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #retryList))
+                else
+                    setStatus2("✓ All cargo teleported! ♡")
                 end
 
                 setProgTrucks(cargoTotal, cargoTotal)
+                task.wait(1)
             end
         end
 
