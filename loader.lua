@@ -73,7 +73,7 @@ if not keyValid then
     return
 end
 
--- Key valid — load script for current game
+-- Key valid — loading popup
 local sg2 = Instance.new("ScreenGui", game.CoreGui)
 sg2.Name = "VHLoading"
 sg2.ResetOnSpawn = false
@@ -94,21 +94,48 @@ loadLbl.BackgroundTransparency = 1
 loadLbl.Font = Enum.Font.GothamBold
 loadLbl.TextSize = 16
 loadLbl.TextColor3 = Color3.fromRGB(230, 206, 226)
-loadLbl.Text = "⏳  Loading..."
+loadLbl.Text = "⏳  Loading VanillaHub..."
 
+-- Vanilla scripts list
+local vanillaScripts = {
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla1.lua",
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla2.lua",
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla3.lua",
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla4.lua",
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla5.lua",
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla6.lua",
+    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla7.lua",
+}
+
+local function loadVanilla()
+    for i, url in ipairs(vanillaScripts) do
+        loadLbl.Text = "⏳  Loading VanillaHub... ("..i.."/7)"
+        local ok, src = pcall(fetch, url)
+        if ok and src then
+            local fn, err = loadstring(src)
+            if fn then
+                local runOk, runErr = pcall(fn)
+                if not runOk then
+                    warn("[VanillaHub] Vanilla"..i.." error: "..tostring(runErr))
+                end
+            else
+                warn("[VanillaHub] Failed to compile Vanilla"..i..": "..tostring(err))
+            end
+        else
+            warn("[VanillaHub] Failed to fetch Vanilla"..i)
+        end
+        task.wait(0.3)
+    end
+end
+
+-- Load based on game
 if game.PlaceId == 13822889 then
-    loadLbl.Text = "⏳  Loading Lumber Tycoon 2..."
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua"))("")
-
-elseif game.PlaceId == 606849621 then
-    loadLbl.Text = "⏳  Loading Jailbreak..."
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Jailbreak.lua"))("")
-
-elseif game.PlaceId == 185655149 then
-    loadLbl.Text = "⏳  Loading Bloxburg..."
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Bloxburg.lua"))("")
+    -- Lumber Tycoon 2 — load all 7 Vanilla scripts
+    loadLbl.Text = "⏳  Loading VanillaHub for LT2..."
+    loadVanilla()
 
 else
+    -- Game not supported
     loadLbl.Text = "❌  Game not supported!"
     task.delay(4, function()
         if sg2 and sg2.Parent then sg2:Destroy() end
@@ -117,18 +144,9 @@ else
     return
 end
 
-loadLbl.Text = "✅  Loaded!"
+loadLbl.Text = "✅  VanillaHub Loaded!"
 task.delay(3, function()
     if sg2 and sg2.Parent then sg2:Destroy() end
 end)
 
 getgenv().VHKey = nil
-```
-
----
-
-Your GitHub repo now only needs:
-```
-VanillaHub-Protected/
-├── loader.lua   ← the file above
-└── keys.txt     ← your keys list
