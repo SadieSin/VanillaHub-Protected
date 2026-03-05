@@ -977,30 +977,125 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
         end
     end
 
-    if not GiveBaseOrigin then
-        setTruckStatus("⚠ Giver base not found!", false) return
-    end
-    if not ReceiverBaseOrigin then
-        setTruckStatus("⚠ Receiver base not found!", false) return
-    end
+    if not GiveBaseOrigin  then setTruckStatus("⚠ Giver base not found!",    false) return end
+    if not ReceiverBaseOrigin then setTruckStatus("⚠ Receiver base not found!", false) return end
 
     local mainPart = truckModel:FindFirstChild("Main")
-    if not mainPart then
-        setTruckStatus("⚠ Truck has no Main part!", false) return
-    end
+    if not mainPart then setTruckStatus("⚠ Truck has no Main part!", false) return end
 
-    setTruckStatus("Teleporting truck...", true)
+    task.spawn(function()
+        local RS = game:GetService("ReplicatedStorage")
 
-    local TCF  = mainPart.CFrame
-    local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-    local newCF = CFrame.new(nPos) * TCF.Rotation
+        -- Helper: is a point inside a bounding box?
+        local function isPointInside(point, boxCFrame, boxSize)
+            local r = boxCFrame:PointToObjectSpace(point)
+            return math.abs(r.X) <= boxSize.X / 2
+               and math.abs(r.Y) <= boxSize.Y / 2 + 2
+               and math.abs(r.Z) <= boxSize.Z / 2
+        end
 
-    pcall(function()
-        truckModel:SetPrimaryPartCFrame(newCF)
+        -- ── Phase 1: scan cargo inside the truck's bounding box ──────────────
+        setTruckStatus("Scanning cargo...", true)
+
+        local mCF, mSz = truckModel:GetBoundingBox()
+
+        -- Parts belonging to the truck itself (ignore these during cargo scan)
+        local ignoredParts = {}
+        for _, p in ipairs(truckModel:GetDescendants()) do
+            if p:IsA("BasePart") then ignoredParts[p] = true end
+        end
+        for _, p in ipairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then ignoredParts[p] = true end
+        end
+
+        local teleportedParts = {}
+
+        for _, part in ipairs(workspace:GetDescendants()) do
+            if part:IsA("BasePart") and not ignoredParts[part] then
+                if part.Name == "Main" or part.Name == "WoodSection" then
+                    if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then
+                        continue
+                    end
+                    if isPointInside(part.Position, mCF, mSz) then
+                        local PCF  = part.CFrame
+                        local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                        local tOff = CFrame.new(nP) * PCF.Rotation
+                        part.CFrame = tOff
+                        table.insert(teleportedParts, {
+                            Instance     = part,
+                            TargetCFrame = tOff,
+                        })
+                    end
+                end
+            end
+        end
+
+        -- ── Teleport the truck itself ────────────────────────────────────────
+        setTruckStatus("Teleporting truck...", true)
+        local TCF  = mainPart.CFrame
+        local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+        pcall(function()
+            truckModel:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
+        end)
+
+        -- ── Phase 2: retry missed cargo up to 25 times ───────────────────────
+        task.wait(2) -- let spawned teleports settle
+
+        local cargoTotal = #teleportedParts
+        if cargoTotal == 0 then
+            setTruckStatus("✓ Truck teleported! (no cargo found)", false)
+            return
+        end
+
+        local MAX_TRIES = 25
+        local attempt   = 0
+
+        local function getMissed()
+            local missed = {}
+            for _, data in ipairs(teleportedParts) do
+                if data.Instance and data.Instance.Parent then
+                    if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
+                        table.insert(missed, data)
+                    end
+                end
+            end
+            return missed
+        end
+
+        local missedList = getMissed()
+
+        while #missedList > 0 and attempt < MAX_TRIES do
+            attempt += 1
+            setTruckStatus(string.format("Cargo retry %d/%d — %d left...", attempt, MAX_TRIES, #missedList), true)
+
+            for _, data in ipairs(missedList) do
+                local item = data.Instance
+                if not (item and item.Parent) then continue end
+
+                -- Warp to the item to gain network ownership
+                local tries = 0
+                while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
+                    Char.HumanoidRootPart.CFrame = item.CFrame
+                    task.wait(0.1)
+                    tries += 1
+                end
+
+                RS.Interaction.ClientIsDragging:FireServer(item.Parent)
+                task.wait(0.6)
+                item.CFrame = data.TargetCFrame
+                task.wait(0.2)
+            end
+
+            task.wait(1)
+            missedList = getMissed()
+        end
+
+        if #missedList == 0 then
+            setTruckStatus("✓ Truck + all cargo teleported!", false)
+        else
+            setTruckStatus(string.format("Done — %d cargo part(s) missed after %d tries", #missedList, MAX_TRIES), false)
+        end
     end)
-
-    task.wait(0.2)
-    setTruckStatus("✓ Truck teleported!", false)
 end)
 
 print("[VanillaHub] Vanilla2 loaded — Butter Leak ready in Dupe tab")
