@@ -1,460 +1,324 @@
 -- ════════════════════════════════════════════════════
--- VANILLA2 — Butter Leak Tab
--- Imports shared state from Vanilla1 via _G.VH
+-- VANILLA2 — Butter Leak (injected into Dupe Tab)
+-- Requires Vanilla1 (_G.VH) to be loaded first.
 -- ════════════════════════════════════════════════════
 
 if not _G.VH then
-    _G.VH = { butter = { running = false } }
+    warn("[VanillaHub] Vanilla2: _G.VH not found. Execute Vanilla1 first.")
+    return
 end
 
-print("[VanillaHub] Vanilla2 loaded")
+local VH             = _G.VH
+local TweenService   = VH.TweenService
+local Players        = VH.Players
+local player         = VH.player
+local BTN_COLOR      = VH.BTN_COLOR
+local BTN_HOVER      = VH.BTN_HOVER
+local THEME_TEXT     = VH.THEME_TEXT
+local dupePage       = VH.pages["DupeTab"]
 
-local TweenService     = game:GetService("TweenService")
-local Players          = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local player           = Players.LocalPlayer
-
--- ── THEME ─────────────────────────────────────────────
-local C = {
-    BG        = Color3.fromRGB(18, 10, 18),
-    PANEL     = Color3.fromRGB(26, 14, 26),
-    CARD      = Color3.fromRGB(34, 18, 34),
-    TOPBAR    = Color3.fromRGB(10, 5, 12),
-    PINK      = Color3.fromRGB(255, 105, 180),
-    PINK_DIM  = Color3.fromRGB(200, 70, 140),
-    PINK_DARK = Color3.fromRGB(120, 30, 80),
-    PINK_GLOW = Color3.fromRGB(255, 160, 210),
-    BTN       = Color3.fromRGB(50, 25, 50),
-    BTN_HOV   = Color3.fromRGB(80, 35, 75),
-    BORDER    = Color3.fromRGB(80, 30, 70),
-    TEXT      = Color3.fromRGB(255, 220, 240),
-    TEXT_DIM  = Color3.fromRGB(160, 110, 150),
-    RED       = Color3.fromRGB(200, 40, 80),
-    PROG_BG   = Color3.fromRGB(28, 10, 28),
-    PROG_DONE = Color3.fromRGB(60, 200, 110),
-}
-
--- ── CLEANUP ───────────────────────────────────────────
-local cleanupTasks = {}
-local function addCleanup(fn) table.insert(cleanupTasks, fn) end
-local function runCleanup()
-    for _, fn in ipairs(cleanupTasks) do pcall(fn) end
+if not dupePage then
+    warn("[VanillaHub] Vanilla2: DupeTab page not found.")
+    return
 end
 
--- ══════════════════════════════════════════════════════
--- ROOT GUI
--- ══════════════════════════════════════════════════════
-if game.CoreGui:FindFirstChild("VanillaButterHub") then
-    game.CoreGui.VanillaButterHub:Destroy()
-end
+-- ── HELPERS ───────────────────────────────────────────────────────────────────
 
-local gui = Instance.new("ScreenGui")
-gui.Name           = "VanillaButterHub"
-gui.Parent         = game.CoreGui
-gui.ResetOnSpawn   = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-addCleanup(function() if gui and gui.Parent then gui:Destroy() end end)
-
--- ── TOGGLE BUTTON ────────────────────────────────────
-local toggleBtn = Instance.new("TextButton", gui)
-toggleBtn.Size             = UDim2.new(0, 28, 0, 90)
-toggleBtn.Position         = UDim2.new(0, 0, 0.5, -45)
-toggleBtn.BackgroundColor3 = C.PINK_DARK
-toggleBtn.BorderSizePixel  = 0
-toggleBtn.Text             = "♡\nH\nU\nB"
-toggleBtn.Font             = Enum.Font.GothamBold
-toggleBtn.TextSize         = 10
-toggleBtn.TextColor3       = C.PINK_GLOW
-toggleBtn.ZIndex           = 30
-toggleBtn.AutoButtonColor  = false
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
-local tgStroke = Instance.new("UIStroke", toggleBtn)
-tgStroke.Color = C.PINK; tgStroke.Thickness = 1.2; tgStroke.Transparency = 0.3
-TweenService:Create(tgStroke, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Transparency = 0.85}):Play()
-
--- ── MAIN WINDOW ───────────────────────────────────────
-local main = Instance.new("Frame", gui)
-main.Name                   = "Main"
-main.Size                   = UDim2.new(0, 0, 0, 0)
-main.Position               = UDim2.new(0.5, -195, 0.5, -245)
-main.BackgroundColor3       = C.BG
-main.BackgroundTransparency = 1
-main.BorderSizePixel        = 0
-main.ClipsDescendants       = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
-local mainStroke = Instance.new("UIStroke", main)
-mainStroke.Color = C.BORDER; mainStroke.Thickness = 1.4; mainStroke.Transparency = 0.2
-
-local isOpen = false
-local function openWindow()
-    isOpen = true
-    TweenService:Create(main, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        {Size = UDim2.new(0, 390, 0, 490), BackgroundTransparency = 0}):Play()
-end
-local function closeWindow()
-    isOpen = false
-    TweenService:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In),
-        {Size = UDim2.new(0, 0, 0, 0), BackgroundTransparency = 1}):Play()
-end
-toggleBtn.MouseButton1Click:Connect(function()
-    if isOpen then closeWindow() else openWindow() end
-end)
-openWindow()
-
--- ── TOP BAR ───────────────────────────────────────────
-local topBar = Instance.new("Frame", main)
-topBar.Size = UDim2.new(1, 0, 0, 40); topBar.BackgroundColor3 = C.TOPBAR; topBar.BorderSizePixel = 0
-local topGrad = Instance.new("UIGradient", topBar)
-topGrad.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(40,10,35)), ColorSequenceKeypoint.new(1, Color3.fromRGB(10,5,12))})
-topGrad.Rotation = 90
-local dot = Instance.new("Frame", topBar)
-dot.Size = UDim2.new(0,8,0,8); dot.Position = UDim2.new(0,14,0.5,-4); dot.BackgroundColor3 = C.PINK; dot.BorderSizePixel = 0
-Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-local titleLbl = Instance.new("TextLabel", topBar)
-titleLbl.Size = UDim2.new(1,-100,1,0); titleLbl.Position = UDim2.new(0,30,0,0); titleLbl.BackgroundTransparency = 1
-titleLbl.Text = "♡  Butter Leak"; titleLbl.Font = Enum.Font.GothamBold; titleLbl.TextSize = 16
-titleLbl.TextColor3 = C.PINK_GLOW; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-local closeBtn = Instance.new("TextButton", topBar)
-closeBtn.Size = UDim2.new(0,28,0,28); closeBtn.Position = UDim2.new(1,-36,0.5,-14)
-closeBtn.BackgroundColor3 = C.RED; closeBtn.Text = "×"; closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 18; closeBtn.TextColor3 = Color3.fromRGB(255,255,255); closeBtn.BorderSizePixel = 0; closeBtn.AutoButtonColor = false
-Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 7)
-closeBtn.MouseButton1Click:Connect(function() runCleanup(); closeWindow() end)
-
--- ── DRAG ──────────────────────────────────────────────
-local dragging, dragStart, startPos = false, nil, nil
-topBar.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging=true; dragStart=i.Position; startPos=main.Position end
-end)
-UserInputService.InputChanged:Connect(function(i)
-    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = i.Position - dragStart
-        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset+d.X, startPos.Y.Scale, startPos.Y.Offset+d.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-
--- ══════════════════════════════════════════════════════
--- WIDGET HELPERS
--- ══════════════════════════════════════════════════════
-local function makeScroll(parent)
-    local s = Instance.new("ScrollingFrame", parent)
-    s.Size = UDim2.new(1,0,1,0); s.BackgroundTransparency = 1; s.BorderSizePixel = 0
-    s.ScrollBarThickness = 3; s.ScrollBarImageColor3 = C.PINK_DIM; s.CanvasSize = UDim2.new(0,0,0,0)
-    local ll = Instance.new("UIListLayout", s)
-    ll.Padding = UDim.new(0,5); ll.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    ll.SortOrder = Enum.SortOrder.LayoutOrder
-    ll:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        s.CanvasSize = UDim2.new(0,0,0, ll.AbsoluteContentSize.Y + 18)
-    end)
-    local pad = Instance.new("UIPadding", s)
-    pad.PaddingTop = UDim.new(0,8); pad.PaddingBottom = UDim.new(0,10)
-    return s
-end
-
-local function sectionLabel(parent, text, order)
+local function makeLabel(parent, text)
     local lbl = Instance.new("TextLabel", parent)
-    lbl.Size = UDim2.new(1,-20,0,18); lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 10; lbl.TextColor3 = C.PINK_DIM
-    lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Text = "▸  " .. string.upper(text)
-    lbl.LayoutOrder = order or 0
-    local p = Instance.new("UIPadding", lbl); p.PaddingLeft = UDim.new(0,4)
+    lbl.Size = UDim2.new(1, -12, 0, 22)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 11
+    lbl.TextColor3 = Color3.fromRGB(120, 120, 150)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = string.upper(text)
+    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0, 4)
     return lbl
 end
 
-local function sep(parent, order)
+local function makeSep(parent)
     local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1,-20,0,1); f.BackgroundColor3 = C.BORDER
-    f.BorderSizePixel = 0; f.BackgroundTransparency = 0.5; f.LayoutOrder = order or 0
+    f.Size = UDim2.new(1, -12, 0, 1)
+    f.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    f.BorderSizePixel = 0
     return f
 end
 
-local function makeBtn(parent, text, color, order)
-    color = color or C.BTN
+local function makeBtn(parent, text, color, callback)
     local btn = Instance.new("TextButton", parent)
-    btn.Size = UDim2.new(1,-20,0,32); btn.BackgroundColor3 = color; btn.Text = text
-    btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13; btn.TextColor3 = C.TEXT
-    btn.BorderSizePixel = 0; btn.AutoButtonColor = false; btn.LayoutOrder = order or 0
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,7)
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Color = C.BORDER; stroke.Thickness = 1; stroke.Transparency = 0.6
-    local hov = Color3.fromRGB(math.min(color.R*255+30,255)/255, math.min(color.G*255+10,255)/255, math.min(color.B*255+25,255)/255)
-    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3=hov}):Play() end)
-    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3=color}):Play() end)
+    btn.Size = UDim2.new(1, -12, 0, 34)
+    btn.BackgroundColor3 = color or BTN_COLOR
+    btn.BorderSizePixel = 0
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    btn.TextColor3 = THEME_TEXT
+    btn.Text = text
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    local base = color or BTN_COLOR
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = BTN_HOVER}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = base}):Play()
+    end)
+    btn.MouseButton1Click:Connect(callback)
     return btn
 end
 
-local function makeToggle(parent, text, default, order, cb)
+local function makeToggle(parent, text, default, callback)
     local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1,-20,0,32); frame.BackgroundColor3 = C.CARD
-    frame.BorderSizePixel = 0; frame.LayoutOrder = order or 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,7)
-    local stroke = Instance.new("UIStroke", frame)
-    stroke.Color = C.BORDER; stroke.Thickness = 1; stroke.Transparency = 0.6
+    frame.Size = UDim2.new(1, -12, 0, 32)
+    frame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+    frame.BorderSizePixel = 0
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
     local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(1,-56,1,0); lbl.Position = UDim2.new(0,12,0,0); lbl.BackgroundTransparency = 1
-    lbl.Text = text; lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 12; lbl.TextColor3 = C.TEXT
+    lbl.Size = UDim2.new(1, -50, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamSemibold
+    lbl.TextSize = 13
+    lbl.TextColor3 = THEME_TEXT
     lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = text
     local tb = Instance.new("TextButton", frame)
-    tb.Size = UDim2.new(0,36,0,20); tb.Position = UDim2.new(1,-46,0.5,-10)
-    tb.BackgroundColor3 = default and C.PINK_DARK or C.BTN; tb.Text = ""; tb.BorderSizePixel = 0; tb.AutoButtonColor = false
-    Instance.new("UICorner", tb).CornerRadius = UDim.new(1,0)
+    tb.Size = UDim2.new(0, 34, 0, 18)
+    tb.Position = UDim2.new(1, -44, 0.5, -9)
+    tb.BackgroundColor3 = default and Color3.fromRGB(60, 180, 60) or BTN_COLOR
+    tb.Text = ""; tb.BorderSizePixel = 0; tb.AutoButtonColor = false
+    Instance.new("UICorner", tb).CornerRadius = UDim.new(1, 0)
     local knob = Instance.new("Frame", tb)
-    knob.Size = UDim2.new(0,14,0,14); knob.Position = UDim2.new(0, default and 19 or 3, 0.5,-7)
-    knob.BackgroundColor3 = Color3.fromRGB(255,255,255); knob.BorderSizePixel = 0
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(0, default and 18 or 2, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255); knob.BorderSizePixel = 0
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     local toggled = default
-    if cb then cb(toggled) end
+    if callback then callback(toggled) end
     tb.MouseButton1Click:Connect(function()
         toggled = not toggled
-        TweenService:Create(tb, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {BackgroundColor3 = toggled and C.PINK_DARK or C.BTN}):Play()
-        TweenService:Create(knob, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {Position = UDim2.new(0, toggled and 19 or 3, 0.5,-7)}):Play()
-        if cb then cb(toggled) end
+        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = toggled and Color3.fromRGB(60, 180, 60) or BTN_COLOR
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
+        }):Play()
+        if callback then callback(toggled) end
     end)
     return frame, function() return toggled end
 end
 
-local function makeInputRow(parent, labelText, placeholder, order)
+local function makeInput(parent, labelText, placeholder)
     local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1,-20,0,32); frame.BackgroundColor3 = C.CARD
-    frame.BorderSizePixel = 0; frame.LayoutOrder = order or 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,7)
-    local stroke = Instance.new("UIStroke", frame)
-    stroke.Color = C.BORDER; stroke.Thickness = 1; stroke.Transparency = 0.5
+    frame.Size = UDim2.new(1, -12, 0, 34)
+    frame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+    frame.BorderSizePixel = 0
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
     local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(0,100,1,0); lbl.Position = UDim2.new(0,10,0,0); lbl.BackgroundTransparency = 1
-    lbl.Text = labelText; lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 11
-    lbl.TextColor3 = C.TEXT_DIM; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Size = UDim2.new(0, 110, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 12
+    lbl.TextColor3 = Color3.fromRGB(160, 150, 170)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Text = labelText
     local box = Instance.new("TextBox", frame)
-    box.Size = UDim2.new(1,-115,0,22); box.Position = UDim2.new(0,108,0.5,-11)
-    box.BackgroundColor3 = C.BTN; box.BorderSizePixel = 0; box.Text = ""
-    box.PlaceholderText = placeholder or "..."; box.PlaceholderColor3 = C.TEXT_DIM
-    box.Font = Enum.Font.Gotham; box.TextSize = 11; box.TextColor3 = C.TEXT; box.ClearTextOnFocus = false
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0,5)
-    local pad = Instance.new("UIPadding", box); pad.PaddingLeft = UDim.new(0,6)
+    box.Size = UDim2.new(1, -125, 0, 22)
+    box.Position = UDim2.new(0, 118, 0.5, -11)
+    box.BackgroundColor3 = Color3.fromRGB(35, 35, 45); box.BorderSizePixel = 0
+    box.Font = Enum.Font.Gotham; box.TextSize = 12; box.TextColor3 = THEME_TEXT
+    box.PlaceholderText = placeholder or "..."; box.PlaceholderColor3 = Color3.fromRGB(90, 85, 100)
+    box.Text = ""; box.ClearTextOnFocus = false
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
+    Instance.new("UIPadding", box).PaddingLeft = UDim.new(0, 6)
     return frame, box
 end
 
--- ── STATUS PILL ───────────────────────────────────────
-local function makeStatusPill(parent, order)
-    local bar = Instance.new("Frame", parent)
-    bar.Size = UDim2.new(1,-20,0,26); bar.BackgroundColor3 = Color3.fromRGB(12,6,14)
-    bar.BorderSizePixel = 0; bar.LayoutOrder = order or 0
-    Instance.new("UICorner", bar).CornerRadius = UDim.new(0,6)
-    local stroke = Instance.new("UIStroke", bar)
-    stroke.Color = C.BORDER; stroke.Thickness = 1; stroke.Transparency = 0.4
-    local sdot = Instance.new("Frame", bar)
-    sdot.Size = UDim2.new(0,7,0,7); sdot.Position = UDim2.new(0,10,0.5,-3)
-    sdot.BackgroundColor3 = C.PINK_DIM; sdot.BorderSizePixel = 0
-    Instance.new("UICorner", sdot).CornerRadius = UDim.new(1,0)
-    local stxt = Instance.new("TextLabel", bar)
-    stxt.Size = UDim2.new(1,-70,1,0); stxt.Position = UDim2.new(0,24,0,0); stxt.BackgroundTransparency = 1
-    stxt.Font = Enum.Font.Gotham; stxt.TextSize = 11; stxt.TextColor3 = C.TEXT_DIM
-    stxt.TextXAlignment = Enum.TextXAlignment.Left; stxt.Text = "Ready"
-    local scnt = Instance.new("TextLabel", bar)
-    scnt.Size = UDim2.new(0,60,1,0); scnt.Position = UDim2.new(1,-68,0,0); scnt.BackgroundTransparency = 1
-    scnt.Font = Enum.Font.GothamBold; scnt.TextSize = 11; scnt.TextColor3 = C.PINK
-    scnt.TextXAlignment = Enum.TextXAlignment.Right; scnt.Text = ""
-    return bar, stxt, scnt, sdot
-end
-
--- ── PROGRESS BLOCK ─────────────────────────────────────
-local function makeProgressBlock(parent, label, order)
-    local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1,-20,0,42)
-    container.BackgroundColor3 = C.CARD
-    container.BorderSizePixel = 0
-    container.LayoutOrder = order or 0
-    container.Visible = false
-    Instance.new("UICorner", container).CornerRadius = UDim.new(0,7)
-    local stroke = Instance.new("UIStroke", container)
-    stroke.Color = C.BORDER; stroke.Thickness = 1; stroke.Transparency = 0.5
-
-    local labelLbl = Instance.new("TextLabel", container)
-    labelLbl.Size = UDim2.new(0.6,0,0,18)
-    labelLbl.Position = UDim2.new(0,10,0,4)
-    labelLbl.BackgroundTransparency = 1
-    labelLbl.Font = Enum.Font.GothamSemibold
-    labelLbl.TextSize = 11
-    labelLbl.TextColor3 = C.PINK_GLOW
-    labelLbl.TextXAlignment = Enum.TextXAlignment.Left
-    labelLbl.Text = label
-
-    local counterLbl = Instance.new("TextLabel", container)
-    counterLbl.Size = UDim2.new(0.4,-10,0,18)
-    counterLbl.Position = UDim2.new(0.6,0,0,4)
-    counterLbl.BackgroundTransparency = 1
-    counterLbl.Font = Enum.Font.GothamBold
-    counterLbl.TextSize = 11
-    counterLbl.TextColor3 = C.PINK
-    counterLbl.TextXAlignment = Enum.TextXAlignment.Right
-    counterLbl.Text = "0 / 0"
-
-    local track = Instance.new("Frame", container)
-    track.Size = UDim2.new(1,-16,0,8)
-    track.Position = UDim2.new(0,8,0,26)
-    track.BackgroundColor3 = C.PROG_BG
-    track.BorderSizePixel = 0
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
-
+local function makeProgressBar(parent, labelText)
+    local wrap = Instance.new("Frame", parent)
+    wrap.Size = UDim2.new(1, -12, 0, 44)
+    wrap.BackgroundColor3 = Color3.fromRGB(18, 18, 24); wrap.BorderSizePixel = 0; wrap.Visible = false
+    Instance.new("UICorner", wrap).CornerRadius = UDim.new(0, 8)
+    local stroke = Instance.new("UIStroke", wrap)
+    stroke.Color = Color3.fromRGB(60, 60, 80); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local topRow = Instance.new("Frame", wrap)
+    topRow.Size = UDim2.new(1, -12, 0, 18); topRow.Position = UDim2.new(0, 6, 0, 4); topRow.BackgroundTransparency = 1
+    local nameLbl = Instance.new("TextLabel", topRow)
+    nameLbl.Size = UDim2.new(0.6, 0, 1, 0); nameLbl.BackgroundTransparency = 1
+    nameLbl.Font = Enum.Font.GothamSemibold; nameLbl.TextSize = 11
+    nameLbl.TextColor3 = THEME_TEXT; nameLbl.TextXAlignment = Enum.TextXAlignment.Left; nameLbl.Text = labelText
+    local cntLbl = Instance.new("TextLabel", topRow)
+    cntLbl.Size = UDim2.new(0.4, 0, 1, 0); cntLbl.Position = UDim2.new(0.6, 0, 0, 0); cntLbl.BackgroundTransparency = 1
+    cntLbl.Font = Enum.Font.GothamBold; cntLbl.TextSize = 11
+    cntLbl.TextColor3 = Color3.fromRGB(120, 200, 120); cntLbl.TextXAlignment = Enum.TextXAlignment.Right; cntLbl.Text = "0 / 0"
+    local track = Instance.new("Frame", wrap)
+    track.Size = UDim2.new(1, -12, 0, 10); track.Position = UDim2.new(0, 6, 0, 26)
+    track.BackgroundColor3 = Color3.fromRGB(30, 30, 40); track.BorderSizePixel = 0
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
     local fill = Instance.new("Frame", track)
-    fill.Size = UDim2.new(0,0,1,0)
-    fill.BackgroundColor3 = C.PINK
-    fill.BorderSizePixel = 0
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
+    fill.Size = UDim2.new(0, 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(80, 180, 100); fill.BorderSizePixel = 0
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
     local function setProgress(done, total)
         local pct = math.clamp(done / math.max(total, 1), 0, 1)
-        counterLbl.Text = done .. " / " .. total .. " left"
-        local barColor = pct >= 1
-            and C.PROG_DONE
-            or Color3.fromRGB(
-                math.floor(C.PINK.R*255 + (C.PROG_DONE.R*255 - C.PINK.R*255)*pct) / 255,
-                math.floor(C.PINK.G*255 + (C.PROG_DONE.G*255 - C.PINK.G*255)*pct) / 255,
-                math.floor(C.PINK.B*255 + (C.PROG_DONE.B*255 - C.PINK.B*255)*pct) / 255
-            )
-        TweenService:Create(fill, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {
-            Size = UDim2.new(pct, 0, 1, 0),
-            BackgroundColor3 = barColor
-        }):Play()
+        cntLbl.Text = done .. " / " .. total
+        TweenService:Create(fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Size = UDim2.new(pct, 0, 1, 0)}):Play()
     end
-
     local function reset()
-        fill.Size = UDim2.new(0,0,1,0)
-        fill.BackgroundColor3 = C.PINK
-        counterLbl.Text = "0 / 0"
-        container.Visible = false
+        fill.Size = UDim2.new(0, 0, 1, 0); cntLbl.Text = "0 / 0"; wrap.Visible = false
     end
-
-    return container, setProgress, reset
+    return wrap, setProgress, reset
 end
 
--- ══════════════════════════════════════════════════════
--- ▌ BUTTER LEAK CONTENT
--- ══════════════════════════════════════════════════════
-local contentArea = Instance.new("Frame", main)
-contentArea.Size = UDim2.new(1,0,1,-40); contentArea.Position = UDim2.new(0,0,0,40)
-contentArea.BackgroundColor3 = C.PANEL; contentArea.BorderSizePixel = 0; contentArea.ClipsDescendants = true
+-- ── STATUS BAR ────────────────────────────────────────────────────────────────
+local statusBar = Instance.new("Frame", dupePage)
+statusBar.Size = UDim2.new(1, -12, 0, 28)
+statusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24); statusBar.BorderSizePixel = 0
+Instance.new("UICorner", statusBar).CornerRadius = UDim.new(0, 6)
+Instance.new("UIStroke", statusBar).Color = Color3.fromRGB(50, 50, 70)
 
-local scrollButter = makeScroll(contentArea)
-scrollButter.Visible = true
+local statusDot = Instance.new("Frame", statusBar)
+statusDot.Size = UDim2.new(0, 8, 0, 8); statusDot.Position = UDim2.new(0, 10, 0.5, -4)
+statusDot.BackgroundColor3 = Color3.fromRGB(100, 100, 120); statusDot.BorderSizePixel = 0
+Instance.new("UICorner", statusDot).CornerRadius = UDim.new(1, 0)
 
-local _, sTxt2, sCnt2, sDot2 = makeStatusPill(scrollButter, 1)
-local function setStatus2(msg) sTxt2.Text = msg end
+local statusLbl = Instance.new("TextLabel", statusBar)
+statusLbl.Size = UDim2.new(1, -28, 1, 0); statusLbl.Position = UDim2.new(0, 26, 0, 0)
+statusLbl.BackgroundTransparency = 1; statusLbl.Font = Enum.Font.Gotham; statusLbl.TextSize = 12
+statusLbl.TextColor3 = Color3.fromRGB(160, 155, 175); statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+statusLbl.Text = "Ready"
 
-sectionLabel(scrollButter, "Players", 2)
-local _, giverBox    = makeInputRow(scrollButter, "Giver Name",    "player username", 3)
-local _, receiverBox = makeInputRow(scrollButter, "Receiver Name", "player username", 4)
+local function setStatus(msg, active)
+    statusLbl.Text = msg
+    TweenService:Create(statusDot, TweenInfo.new(0.2), {
+        BackgroundColor3 = active and Color3.fromRGB(80, 200, 100) or Color3.fromRGB(100, 100, 120)
+    }):Play()
+end
 
-sep(scrollButter, 5)
-sectionLabel(scrollButter, "What to Transfer", 6)
+-- ── PLAYER INPUTS ─────────────────────────────────────────────────────────────
+makeLabel(dupePage, "Players")
+local _, giverBox    = makeInput(dupePage, "Giver Name",    "username")
+local _, receiverBox = makeInput(dupePage, "Receiver Name", "username")
 
-local _, getStructures = makeToggle(scrollButter, "Structures",      false, 7)
-local _, getFurniture  = makeToggle(scrollButter, "Furniture",       false, 8)
-local _, getTrucks     = makeToggle(scrollButter, "Trucks + Cargo",  false, 9)
-local _, getItems      = makeToggle(scrollButter, "Purchased Items", false, 10)
-local _, getGifs       = makeToggle(scrollButter, "Gif Items",       false, 11)
-local _, getWood       = makeToggle(scrollButter, "Wood",            false, 12)
+makeSep(dupePage)
+makeLabel(dupePage, "What to Transfer")
 
-sep(scrollButter, 13)
-sectionLabel(scrollButter, "Progress", 14)
+local _, getStructures = makeToggle(dupePage, "Structures",      false)
+local _, getFurniture  = makeToggle(dupePage, "Furniture",       false)
+local _, getTrucks     = makeToggle(dupePage, "Trucks + Cargo",  false)
+local _, getItems      = makeToggle(dupePage, "Purchased Items", false)
+local _, getGifs       = makeToggle(dupePage, "Gif Items",       false)
+local _, getWood       = makeToggle(dupePage, "Wood",            false)
 
-local progStructures, setProgStructures, resetProgStructures = makeProgressBlock(scrollButter, "Structures",      15)
-local progFurniture,  setProgFurniture,  resetProgFurniture  = makeProgressBlock(scrollButter, "Furniture",       16)
-local progTrucks,     setProgTrucks,     resetProgTrucks     = makeProgressBlock(scrollButter, "Trucks + Cargo",  17)
-local progItems,      setProgItems,      resetProgItems      = makeProgressBlock(scrollButter, "Purchased Items", 18)
-local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBlock(scrollButter, "Gif Items",       19)
-local progWood,       setProgWood,       resetProgWood       = makeProgressBlock(scrollButter, "Wood",            20)
+makeSep(dupePage)
+makeLabel(dupePage, "Progress")
 
-sep(scrollButter, 21)
-local runBtn  = makeBtn(scrollButter, "▶  Run Butter Dupe", Color3.fromRGB(100,30,70), 22)
-local stopBtn = makeBtn(scrollButter, "■  Stop", C.BTN, 23)
+local progStructures, setProgStructures, resetProgStructures = makeProgressBar(dupePage, "Structures")
+local progFurniture,  setProgFurniture,  resetProgFurniture  = makeProgressBar(dupePage, "Furniture")
+local progTrucks,     setProgTrucks,     resetProgTrucks     = makeProgressBar(dupePage, "Trucks + Cargo")
+local progItems,      setProgItems,      resetProgItems      = makeProgressBar(dupePage, "Purchased Items")
+local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gif Items")
+local progWood,       setProgWood,       resetProgWood       = makeProgressBar(dupePage, "Wood")
 
+makeSep(dupePage)
+
+local runBtn  = makeBtn(dupePage, "▶  Run Butter Dupe",  Color3.fromRGB(35, 65, 35),  function() end)
+local stopBtn = makeBtn(dupePage, "■  Stop",              Color3.fromRGB(65, 25, 25),  function() end)
+
+-- ── LOGIC ─────────────────────────────────────────────────────────────────────
 local butterRunning = false
 local butterThread  = nil
 
-local function resetAllButterProgress()
+local function resetAllProgress()
     resetProgStructures(); resetProgFurniture(); resetProgTrucks()
-    resetProgItems(); resetProgGifs(); resetProgWood()
+    resetProgItems();      resetProgGifs();      resetProgWood()
 end
 
 stopBtn.MouseButton1Click:Connect(function()
-    butterRunning = false
-    if butterThread then task.cancel(butterThread) end
-    butterThread = nil
-    setStatus2("Stopped")
-    sDot2.BackgroundColor3 = C.TEXT_DIM
-    resetAllButterProgress()
+    butterRunning = false; VH.butter.running = false
+    if butterThread then pcall(task.cancel, butterThread); butterThread = nil end
+    VH.butter.thread = nil
+    setStatus("Stopped", false)
+    resetAllProgress()
 end)
 
 runBtn.MouseButton1Click:Connect(function()
-    if butterRunning then setStatus2("Already running!") return end
+    if butterRunning then setStatus("Already running!", true) return end
+
     local giverName    = giverBox.Text
     local receiverName = receiverBox.Text
-    if giverName=="" or receiverName=="" then setStatus2("⚠ Enter both player names!") return end
+    if giverName == "" or receiverName == "" then
+        setStatus("⚠ Enter both player names!", false) return
+    end
 
-    butterRunning = true
-    sDot2.BackgroundColor3 = C.PINK
-    setStatus2("Finding bases...")
-    resetAllButterProgress()
+    butterRunning = true; VH.butter.running = true
+    setStatus("Finding bases...", true)
+    resetAllProgress()
 
     butterThread = task.spawn(function()
+        VH.butter.thread = butterThread
+
         local RS   = game:GetService("ReplicatedStorage")
         local LP   = Players.LocalPlayer
         local Char = LP.Character or LP.CharacterAdded:Wait()
 
-        local GiveBase, ReceiverBase, GiveBaseOrigin, ReceiverBaseOrigin
+        local GiveBaseOrigin, ReceiverBaseOrigin
 
         for _, v in pairs(workspace.Properties:GetDescendants()) do
             if v.Name == "Owner" then
                 local val = tostring(v.Value)
-                if val == giverName    then GiveBase=v;     GiveBaseOrigin=v.Parent:FindFirstChild("OriginSquare") end
-                if val == receiverName then ReceiverBase=v; ReceiverBaseOrigin=v.Parent:FindFirstChild("OriginSquare") end
+                if val == giverName    then GiveBaseOrigin     = v.Parent:FindFirstChild("OriginSquare") end
+                if val == receiverName then ReceiverBaseOrigin = v.Parent:FindFirstChild("OriginSquare") end
             end
         end
 
         if not (GiveBaseOrigin and ReceiverBaseOrigin) then
-            setStatus2("⚠ Couldn't find bases!"); butterRunning=false; sDot2.BackgroundColor3=C.TEXT_DIM; return
+            setStatus("⚠ Couldn't find bases!", false)
+            butterRunning = false; VH.butter.running = false; butterThread = nil; VH.butter.thread = nil
+            return
         end
 
         local function isPointInside(point, boxCFrame, boxSize)
             local r = boxCFrame:PointToObjectSpace(point)
-            return math.abs(r.X)<=boxSize.X/2 and math.abs(r.Y)<=boxSize.Y/2+2 and math.abs(r.Z)<=boxSize.Z/2
+            return math.abs(r.X) <= boxSize.X/2
+               and math.abs(r.Y) <= boxSize.Y/2 + 2
+               and math.abs(r.Z) <= boxSize.Z/2
         end
 
         local function countItems(typeCheck)
             local n = 0
             for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                if v.Name=="Owner" and tostring(v.Value)==giverName and typeCheck(v.Parent) then n+=1 end
+                if v.Name == "Owner" and tostring(v.Value) == giverName and typeCheck(v.Parent) then
+                    n += 1
+                end
             end
             return n
         end
 
-        -- ── STRUCTURES ────────────────────────────────────
-        if getStructures() then
-            local total = countItems(function(p) return p:FindFirstChild("Type") and tostring(p.Type.Value)=="Structure" and (p:FindFirstChildOfClass("Part") or p:FindFirstChildOfClass("WedgePart")) end)
+        -- ── STRUCTURES ────────────────────────────────────────────────────────
+        if getStructures() and butterRunning then
+            local total = countItems(function(p)
+                return p:FindFirstChild("Type") and tostring(p.Type.Value) == "Structure"
+                    and (p:FindFirstChildOfClass("Part") or p:FindFirstChildOfClass("WedgePart"))
+            end)
             if total > 0 then
-                progStructures.Visible = true
-                setProgStructures(0, total)
-                setStatus2("Sending structures...")
+                progStructures.Visible = true; setProgStructures(0, total)
+                setStatus("Sending structures...", true)
                 local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                         if not butterRunning then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName then
-                            if v.Parent:FindFirstChild("Type") and tostring(v.Parent.Type.Value)=="Structure" then
-                                if v.Parent:FindFirstChildOfClass("Part") or v.Parent:FindFirstChildOfClass("WedgePart") then
-                                    local PCF = (v.Parent:FindFirstChild("MainCFrame") and v.Parent.MainCFrame.Value) or v.Parent:FindFirstChildOfClass("Part").CFrame
-                                    local DA  = v.Parent:FindFirstChild("BlueprintWoodClass") and v.Parent.BlueprintWoodClass.Value or nil
+                        if v.Name == "Owner" and tostring(v.Value) == giverName then
+                            local p = v.Parent
+                            if p:FindFirstChild("Type") and tostring(p.Type.Value) == "Structure" then
+                                if p:FindFirstChildOfClass("Part") or p:FindFirstChildOfClass("WedgePart") then
+                                    local PCF  = (p:FindFirstChild("MainCFrame") and p.MainCFrame.Value) or p:FindFirstChildOfClass("Part").CFrame
+                                    local DA   = p:FindFirstChild("BlueprintWoodClass") and p.BlueprintWoodClass.Value or nil
                                     local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                                     local Off  = CFrame.new(nPos) * PCF.Rotation
                                     repeat task.wait()
                                         pcall(function()
-                                            RS.PlaceStructure.ClientPlacedStructure:FireServer(v.Parent.ItemName.Value, Off, LP, DA, v.Parent, true)
+                                            RS.PlaceStructure.ClientPlacedStructure:FireServer(p.ItemName.Value, Off, LP, DA, p, true)
                                         end)
-                                    until not v.Parent
+                                    until not p.Parent
                                     done += 1; setProgStructures(done, total)
                                 end
                             end
@@ -465,31 +329,34 @@ runBtn.MouseButton1Click:Connect(function()
             end
         end
 
-        -- ── FURNITURE ─────────────────────────────────────
+        -- ── FURNITURE ─────────────────────────────────────────────────────────
         if getFurniture() and butterRunning then
-            local total = countItems(function(p) return p:FindFirstChild("Type") and tostring(p.Type.Value)=="Furniture" and p:FindFirstChildOfClass("Part") end)
+            local total = countItems(function(p)
+                return p:FindFirstChild("Type") and tostring(p.Type.Value) == "Furniture"
+                    and p:FindFirstChildOfClass("Part")
+            end)
             if total > 0 then
-                progFurniture.Visible = true
-                setProgFurniture(0, total)
-                setStatus2("Sending furniture...")
+                progFurniture.Visible = true; setProgFurniture(0, total)
+                setStatus("Sending furniture...", true)
                 local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                         if not butterRunning then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName then
-                            if v.Parent:FindFirstChild("Type") and tostring(v.Parent.Type.Value)=="Furniture" then
-                                if v.Parent:FindFirstChildOfClass("Part") then
-                                    local PCF = (v.Parent:FindFirstChild("MainCFrame") and v.Parent.MainCFrame.Value)
-                                        or (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
-                                        or v.Parent:FindFirstChildOfClass("Part").CFrame
-                                    local DA  = v.Parent:FindFirstChild("BlueprintWoodClass") and v.Parent.BlueprintWoodClass.Value or nil
+                        if v.Name == "Owner" and tostring(v.Value) == giverName then
+                            local p = v.Parent
+                            if p:FindFirstChild("Type") and tostring(p.Type.Value) == "Furniture" then
+                                if p:FindFirstChildOfClass("Part") then
+                                    local PCF  = (p:FindFirstChild("MainCFrame") and p.MainCFrame.Value)
+                                             or (p:FindFirstChild("Main") and p.Main.CFrame)
+                                             or p:FindFirstChildOfClass("Part").CFrame
+                                    local DA   = p:FindFirstChild("BlueprintWoodClass") and p.BlueprintWoodClass.Value or nil
                                     local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                                     local Off  = CFrame.new(nPos) * PCF.Rotation
                                     repeat task.wait()
                                         pcall(function()
-                                            RS.PlaceStructure.ClientPlacedStructure:FireServer(v.Parent.ItemName.Value, Off, LP, DA, v.Parent, true)
+                                            RS.PlaceStructure.ClientPlacedStructure:FireServer(p.ItemName.Value, Off, LP, DA, p, true)
                                         end)
-                                    until not v.Parent
+                                    until not p.Parent
                                     done += 1; setProgFurniture(done, total)
                                 end
                             end
@@ -500,62 +367,68 @@ runBtn.MouseButton1Click:Connect(function()
             end
         end
 
-        -- ══════════════════════════════════════════════════
-        -- ── TRUCKS (with 25-attempt cargo retry loop) ─────
-        -- After all trucks are teleported, we go back to the
-        -- giver's plot and re-attempt any missed cargo parts.
-        -- This repeats up to 25 times before giving up.
-        -- ══════════════════════════════════════════════════
-        local teleportedParts = {}
-        local ignoredParts    = {}
-        local DidTruckTeleport = false
-
-        local function TeleportTruck()
-            if DidTruckTeleport then return end
-            if not Char.Humanoid.SeatPart then return end
-            local TCF  = Char.Humanoid.SeatPart.Parent:FindFirstChild("Main").CFrame
-            local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-            Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
-            DidTruckTeleport = true
-        end
-
+        -- ── TRUCKS + CARGO (25-attempt retry) ─────────────────────────────────
         if getTrucks() and butterRunning then
-            -- Count trucks
+            local teleportedParts  = {}
+            local ignoredParts     = {}
+            local DidTruckTeleport = false
+
+            local function TeleportTruck()
+                if DidTruckTeleport then return end
+                if not Char.Humanoid.SeatPart then return end
+                local TCF  = Char.Humanoid.SeatPart.Parent:FindFirstChild("Main").CFrame
+                local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
+                DidTruckTeleport = true
+            end
+
             local truckCount = 0
             for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                if v.Name=="Owner" and tostring(v.Value)==giverName and v.Parent:FindFirstChild("DriveSeat") then truckCount+=1 end
+                if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
+                    truckCount += 1
+                end
             end
 
             if truckCount > 0 then
-                progTrucks.Visible = true
-                setProgTrucks(0, truckCount)
-                setStatus2("Sending trucks...")
+                progTrucks.Visible = true; setProgTrucks(0, truckCount)
+                setStatus("Sending trucks...", true)
                 local truckDone = 0
 
-                -- ── Phase 1: Teleport all trucks ──────────────
+                -- Phase 1: teleport all trucks
                 for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                     if not butterRunning then break end
-                    if v.Name=="Owner" and tostring(v.Value)==giverName and v.Parent:FindFirstChild("DriveSeat") then
+                    if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
                         v.Parent.DriveSeat:Sit(Char.Humanoid)
                         repeat task.wait() v.Parent.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
-                        local tModel = Char.Humanoid.SeatPart.Parent
-                        local mCF, mSz = tModel:GetBoundingBox()
-                        for _, p in ipairs(tModel:GetDescendants()) do if p:IsA("BasePart") then ignoredParts[p]=true end end
-                        for _, p in ipairs(Char:GetDescendants()) do if p:IsA("BasePart") then ignoredParts[p]=true end end
 
-                        -- Collect cargo parts inside the truck's bounding box
+                        local tModel    = Char.Humanoid.SeatPart.Parent
+                        local mCF, mSz  = tModel:GetBoundingBox()
+
+                        for _, p in ipairs(tModel:GetDescendants()) do
+                            if p:IsA("BasePart") then ignoredParts[p] = true end
+                        end
+                        for _, p in ipairs(Char:GetDescendants()) do
+                            if p:IsA("BasePart") then ignoredParts[p] = true end
+                        end
+
                         for _, part in ipairs(workspace:GetDescendants()) do
                             if part:IsA("BasePart") and not ignoredParts[part] then
-                                if part.Name=="Main" or part.Name=="WoodSection" then
+                                if part.Name == "Main" or part.Name == "WoodSection" then
                                     if part:FindFirstChild("Weld") and part.Weld.Part1.Parent ~= part.Parent then continue end
                                     task.spawn(function()
                                         if isPointInside(part.Position, mCF, mSz) then
                                             TeleportTruck()
-                                            local PCF = part.CFrame
-                                            local nP  = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                                            local PCF  = part.CFrame
+                                            local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                                             local tOff = CFrame.new(nP) * PCF.Rotation
                                             part.CFrame = tOff
-                                            table.insert(teleportedParts, {Instance=part, OldPos=part.Position, TargetCFrame=tOff})
+                                            task.wait(0.3)
+                                            -- record where it actually landed after the attempt
+                                            table.insert(teleportedParts, {
+                                                Instance     = part,
+                                                OldPos       = part.Position,
+                                                TargetCFrame = tOff,
+                                            })
                                         end
                                     end)
                                 end
@@ -568,118 +441,127 @@ runBtn.MouseButton1Click:Connect(function()
                             and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
                         task.wait()
                         Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                        task.wait(0.1); SitPart:Destroy(); TeleportTruck(); DidTruckTeleport=false; task.wait(0.1)
+                        task.wait(0.1); SitPart:Destroy(); TeleportTruck(); DidTruckTeleport = false; task.wait(0.1)
                         if DoorHinge then
-                            for i=1,10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
+                            for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
                         end
                         truckDone += 1; setProgTrucks(truckDone, truckCount)
                     end
                 end
 
-                -- ── Phase 2: Retry missed cargo (up to 25 attempts) ──
-                -- After ALL trucks are done, loop back to the giver's plot
-                -- and keep retrying any cargo that didn't move, up to 25 times.
-                task.wait(1)
 
-                local retryList = {}
-                for _, data in ipairs(teleportedParts) do
-                    if data.Instance and data.Instance.Parent
-                        and (data.Instance.Position - data.OldPos).Magnitude < 5 then
-                        ignoredParts[data.Instance] = nil
-                        table.insert(retryList, data)
-                    end
-                end
+                -- Phase 2: retry any cargo that didn't reach TargetCFrame, up to 25 times
+                -- "Missed" = current position is more than 8 studs from where we wanted it
+                -- We warp directly to each item (wherever it is) to grab it
+                task.wait(2) -- give task.spawns time to finish recording
 
                 local cargoTotal = #teleportedParts
-                local cargoDone  = cargoTotal - #retryList
+                local cargoDone  = 0
+
                 if cargoTotal > 0 then
                     progTrucks.Visible = true
-                    setProgTrucks(cargoDone, cargoTotal)
-                end
+                    setProgTrucks(0, cargoTotal)
 
-                local MAX_TRIES = 25
-                local attempt   = 0
+                    local MAX_TRIES = 25
+                    local attempt   = 0
 
-                repeat
-                    task.wait(1)
-                    retryList = {}
-                    for _, data in ipairs(teleportedParts) do
-                        if data.Instance and data.Instance.Parent
-                            and (data.Instance.Position - data.OldPos).Magnitude < 25 then
-                            table.insert(retryList, data)
+                    local function getMissed()
+                        local missed = {}
+                        for _, data in ipairs(teleportedParts) do
+                            if data.Instance and data.Instance.Parent then
+                                local dist = (data.Instance.Position - data.TargetCFrame.Position).Magnitude
+                                if dist > 8 then
+                                    table.insert(missed, data)
+                                end
+                            end
                         end
+                        return missed
                     end
 
-                    if #retryList > 0 and butterRunning then
+                    local missedList = getMissed()
+
+                    while #missedList > 0 and VH.butter.running and attempt < MAX_TRIES do
                         attempt += 1
-                        setStatus2(string.format("Retry %d/%d — %d cargo left...", attempt, MAX_TRIES, #retryList))
+                        setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
 
-                        -- Warp back to giver's plot so we are near the missed parts
-                        Char.HumanoidRootPart.CFrame = CFrame.new(GiveBaseOrigin.Position + Vector3.new(0, 5, 0))
-                        task.wait(0.3)
-
-                        for _, data in ipairs(retryList) do
-                            if not butterRunning then break end
+                        for _, data in ipairs(missedList) do
+                            if not VH.butter.running then break end
                             local item = data.Instance
                             if not (item and item.Parent) then continue end
-                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 do
-                                Char.HumanoidRootPart.CFrame = item.CFrame; task.wait(0.1)
+
+                            -- Warp directly to the item (it could be anywhere — giver OR receiver side)
+                            local tries = 0
+                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
+                                Char.HumanoidRootPart.CFrame = item.CFrame
+                                task.wait(0.1)
+                                tries += 1
                             end
+
                             RS.Interaction.ClientIsDragging:FireServer(item.Parent)
                             task.wait(0.6)
                             item.CFrame = data.TargetCFrame
-                            cargoDone = cargoTotal - #retryList
-                            setProgTrucks(cargoDone, cargoTotal)
+                            task.wait(0.2)
                         end
+
+                        task.wait(1)
+                        missedList = getMissed()
+                        cargoDone  = cargoTotal - #missedList
+                        setProgTrucks(cargoDone, cargoTotal)
                     end
-                until #retryList == 0 or not butterRunning or attempt >= MAX_TRIES
 
-                if #retryList > 0 then
-                    setStatus2(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #retryList))
-                else
-                    setStatus2("✓ All cargo teleported! ♡")
+                    if #missedList == 0 then
+                        setStatus("✓ All cargo teleported!", true)
+                    else
+                        setStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
+                    end
+
+                    setProgTrucks(cargoTotal, cargoTotal)
+                    task.wait(1)
                 end
-
-                setProgTrucks(cargoTotal, cargoTotal)
-                task.wait(1)
             end
         end
 
-        -- ── SEND ITEM HELPER ──────────────────────────────
+        -- ── SEND ITEM HELPER ──────────────────────────────────────────────────
         local function seekNetOwn(part)
             if not butterRunning then return end
             if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 25 then
                 Char.HumanoidRootPart.CFrame = part.CFrame; task.wait(0.1)
             end
-            for i=1,50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
+            for i = 1, 50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
         end
+
         local function sendItem(part, Offset)
             if not butterRunning then return end
             if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 25 then
                 Char.HumanoidRootPart.CFrame = part.CFrame; task.wait(0.1)
             end
             seekNetOwn(part)
-            for i=1,200 do part.CFrame = Offset end
+            for i = 1, 200 do part.CFrame = Offset end
             task.wait(0.2)
         end
 
-        -- ── PURCHASED ITEMS ───────────────────────────────
+        -- ── PURCHASED ITEMS ───────────────────────────────────────────────────
         if getItems() and butterRunning then
-            local total = countItems(function(p) return p:FindFirstChild("PurchasedBoxItemName") and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")) end)
+            local total = countItems(function(p)
+                return p:FindFirstChild("PurchasedBoxItemName")
+                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
+            end)
             if total > 0 then
                 progItems.Visible = true; setProgItems(0, total)
-                setStatus2("Sending purchased items..."); local done=0
+                setStatus("Sending purchased items...", true)
+                local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                         if not butterRunning then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName then
-                            if v.Parent:FindFirstChild("PurchasedBoxItemName") then
-                                local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
+                        if v.Name == "Owner" and tostring(v.Value) == giverName then
+                            local p = v.Parent
+                            if p:FindFirstChild("PurchasedBoxItemName") then
+                                local part = p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")
                                 if not part then continue end
-                                local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame) or v.Parent:FindFirstChildOfClass("Part").CFrame
+                                local PCF  = (p:FindFirstChild("Main") and p.Main.CFrame) or p:FindFirstChildOfClass("Part").CFrame
                                 local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                                 sendItem(part, CFrame.new(nPos) * PCF.Rotation)
-                                done+=1; setProgItems(done, total)
+                                done += 1; setProgItems(done, total)
                             end
                         end
                     end
@@ -688,23 +570,28 @@ runBtn.MouseButton1Click:Connect(function()
             end
         end
 
-        -- ── GIF ITEMS ─────────────────────────────────────
+        -- ── GIF ITEMS ─────────────────────────────────────────────────────────
         if getGifs() and butterRunning then
-            local total = countItems(function(p) return p:FindFirstChildOfClass("Script") and p:FindFirstChild("DraggableItem") and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")) end)
+            local total = countItems(function(p)
+                return p:FindFirstChildOfClass("Script") and p:FindFirstChild("DraggableItem")
+                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
+            end)
             if total > 0 then
                 progGifs.Visible = true; setProgGifs(0, total)
-                setStatus2("Sending gif items..."); local done=0
+                setStatus("Sending gif items...", true)
+                local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                         if not butterRunning then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName then
-                            if v.Parent:FindFirstChildOfClass("Script") and v.Parent:FindFirstChild("DraggableItem") then
-                                local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
+                        if v.Name == "Owner" and tostring(v.Value) == giverName then
+                            local p = v.Parent
+                            if p:FindFirstChildOfClass("Script") and p:FindFirstChild("DraggableItem") then
+                                local part = p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")
                                 if not part then continue end
-                                local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame) or v.Parent:FindFirstChildOfClass("Part").CFrame
+                                local PCF  = (p:FindFirstChild("Main") and p.Main.CFrame) or p:FindFirstChildOfClass("Part").CFrame
                                 local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                                 sendItem(part, CFrame.new(nPos) * PCF.Rotation)
-                                done+=1; setProgGifs(done, total)
+                                done += 1; setProgGifs(done, total)
                             end
                         end
                     end
@@ -713,28 +600,33 @@ runBtn.MouseButton1Click:Connect(function()
             end
         end
 
-        -- ── WOOD ──────────────────────────────────────────
+        -- ── WOOD ──────────────────────────────────────────────────────────────
         if getWood() and butterRunning then
-            local total = countItems(function(p) return p:FindFirstChild("TreeClass") and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")) end)
+            local total = countItems(function(p)
+                return p:FindFirstChild("TreeClass")
+                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
+            end)
             if total > 0 then
                 progWood.Visible = true; setProgWood(0, total)
-                setStatus2("Sending wood..."); local done=0
+                setStatus("Sending wood...", true)
+                local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                         if not butterRunning then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName then
-                            if v.Parent:FindFirstChild("TreeClass") then
-                                local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
+                        if v.Name == "Owner" and tostring(v.Value) == giverName then
+                            local p = v.Parent
+                            if p:FindFirstChild("TreeClass") then
+                                local part = p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")
                                 if not part then continue end
-                                local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame) or v.Parent:FindFirstChildOfClass("Part").CFrame
+                                local PCF  = (p:FindFirstChild("Main") and p.Main.CFrame) or p:FindFirstChildOfClass("Part").CFrame
                                 local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                                 if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 25 then
                                     Char.HumanoidRootPart.CFrame = part.CFrame; task.wait(0.1)
                                 end
-                                for i=1,50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
-                                for i=1,200 do part.CFrame = CFrame.new(nPos) * PCF.Rotation end
+                                for i = 1, 50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
+                                for i = 1, 200 do part.CFrame = CFrame.new(nPos) * PCF.Rotation end
                                 task.wait(0.2)
-                                done+=1; setProgWood(done, total)
+                                done += 1; setProgWood(done, total)
                             end
                         end
                     end
@@ -743,19 +635,17 @@ runBtn.MouseButton1Click:Connect(function()
             end
         end
 
-        if butterRunning then setStatus2("✓ Done! ♡") end
-        butterRunning = false
-        sDot2.BackgroundColor3 = C.PINK_DIM
-        butterThread = nil
+        if butterRunning then setStatus("✓ Done!", false) end
+        butterRunning = false; VH.butter.running = false
+        butterThread = nil; VH.butter.thread = nil
     end)
 end)
 
--- ── KEYBIND ───────────────────────────────────────────
-UserInputService.InputBegan:Connect(function(input, gpe)
-    if gpe then return end
-    if input.KeyCode == Enum.KeyCode.RightBracket then
-        if isOpen then closeWindow() else openWindow() end
-    end
+-- Register cleanup with Vanilla1 so closing the hub stops any running dupe
+table.insert(VH.cleanupTasks, function()
+    butterRunning = false; VH.butter.running = false
+    if butterThread then pcall(task.cancel, butterThread); butterThread = nil end
+    VH.butter.thread = nil
 end)
 
-print("[VanillaHub] Vanilla2 — Butter Leak ready ♡  |  Press ] or click side button to toggle")
+print("[VanillaHub] Vanilla2 loaded — Butter Leak ready in Dupe tab")
