@@ -1,6 +1,4 @@
 -- VanillaHub Protected Loader
--- Upload this to GitHub as loader.lua
-
 local KEY = getgenv().VHKey
 
 if not KEY then
@@ -8,7 +6,6 @@ if not KEY then
     return
 end
 
--- Key verification
 local keyListURL = "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/keys.txt"
 
 local function fetch(url)
@@ -30,11 +27,9 @@ for line in keyData:gmatch("[^\n]+") do
 end
 
 if not keyValid then
-    -- Error popup
     local sg = Instance.new("ScreenGui", game.CoreGui)
     sg.Name = "VHKeyError"
     sg.ResetOnSpawn = false
-
     local f = Instance.new("Frame", sg)
     f.Size = UDim2.new(0, 420, 0, 140)
     f.Position = UDim2.new(0.5, -210, 0.5, -70)
@@ -42,12 +37,10 @@ if not keyValid then
     f.BackgroundTransparency = 0.15
     f.BorderSizePixel = 0
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 14)
-
     local stroke = Instance.new("UIStroke", f)
     stroke.Color = Color3.fromRGB(190, 50, 50)
     stroke.Thickness = 1.5
     stroke.Transparency = 0.4
-
     local title = Instance.new("TextLabel", f)
     title.Size = UDim2.new(1, 0, 0, 50)
     title.Position = UDim2.new(0, 0, 0, 10)
@@ -56,7 +49,6 @@ if not keyValid then
     title.TextSize = 20
     title.TextColor3 = Color3.fromRGB(255, 80, 80)
     title.Text = "❌  Invalid Key"
-
     local sub = Instance.new("TextLabel", f)
     sub.Size = UDim2.new(1, -30, 0, 30)
     sub.Position = UDim2.new(0, 15, 0, 58)
@@ -66,7 +58,6 @@ if not keyValid then
     sub.TextColor3 = Color3.fromRGB(220, 200, 220)
     sub.Text = "Your key is invalid or expired."
     sub.TextXAlignment = Enum.TextXAlignment.Left
-
     local link = Instance.new("TextLabel", f)
     link.Size = UDim2.new(1, -30, 0, 30)
     link.Position = UDim2.new(0, 15, 0, 88)
@@ -76,18 +67,16 @@ if not keyValid then
     link.TextColor3 = Color3.fromRGB(150, 130, 200)
     link.Text = "Get a key at: YOUR_LOOTLABS_LINK_HERE"
     link.TextXAlignment = Enum.TextXAlignment.Left
-
     task.delay(6, function()
         if sg and sg.Parent then sg:Destroy() end
     end)
     return
 end
 
--- Key valid — show loading popup
+-- Key valid — load script for current game
 local sg2 = Instance.new("ScreenGui", game.CoreGui)
 sg2.Name = "VHLoading"
 sg2.ResetOnSpawn = false
-
 local f2 = Instance.new("Frame", sg2)
 f2.Size = UDim2.new(0, 380, 0, 80)
 f2.Position = UDim2.new(0.5, -190, 1, -110)
@@ -95,70 +84,51 @@ f2.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 f2.BackgroundTransparency = 0.2
 f2.BorderSizePixel = 0
 Instance.new("UICorner", f2).CornerRadius = UDim.new(0, 14)
-
 local stroke2 = Instance.new("UIStroke", f2)
 stroke2.Color = Color3.fromRGB(230, 206, 226)
 stroke2.Thickness = 1.2
 stroke2.Transparency = 0.5
-
 local loadLbl = Instance.new("TextLabel", f2)
 loadLbl.Size = UDim2.new(1, 0, 1, 0)
 loadLbl.BackgroundTransparency = 1
 loadLbl.Font = Enum.Font.GothamBold
 loadLbl.TextSize = 16
 loadLbl.TextColor3 = Color3.fromRGB(230, 206, 226)
-loadLbl.Text = "⏳  Loading VanillaHub..."
+loadLbl.Text = "⏳  Loading..."
 
--- Load all Vanilla scripts
-local scripts = {
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla1.lua",
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla2.lua",
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla3.lua",
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla4.lua",
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla5.lua",
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla6.lua",
-    "https://raw.githubusercontent.com/SadieSin/VanillaHub-Protected/main/Vanilla7.lua",
-}
+if game.PlaceId == 13822889 then
+    loadLbl.Text = "⏳  Loading Lumber Tycoon 2..."
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/LT2.lua"))("")
 
-for i, url in ipairs(scripts) do
-    loadLbl.Text = "⏳  Loading VanillaHub... ("..i.."/7)"
-    local ok, src = pcall(fetch, url)
-    if ok and src then
-        local fn, err = loadstring(src)
-        if fn then
-            local runOk, runErr = pcall(fn)
-            if not runOk then
-                warn("[VanillaHub] Vanilla"..i.." error: "..tostring(runErr))
-            end
-        else
-            warn("[VanillaHub] Failed to compile Vanilla"..i..": "..tostring(err))
-        end
-    else
-        warn("[VanillaHub] Failed to fetch Vanilla"..i)
-    end
-    task.wait(0.3)
+elseif game.PlaceId == 606849621 then
+    loadLbl.Text = "⏳  Loading Jailbreak..."
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Jailbreak.lua"))("")
+
+elseif game.PlaceId == 185655149 then
+    loadLbl.Text = "⏳  Loading Bloxburg..."
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/kode-sec/Butter/refs/heads/main/Bloxburg.lua"))("")
+
+else
+    loadLbl.Text = "❌  Game not supported!"
+    task.delay(4, function()
+        if sg2 and sg2.Parent then sg2:Destroy() end
+    end)
+    getgenv().VHKey = nil
+    return
 end
 
-loadLbl.Text = "✅  VanillaHub Loaded!"
+loadLbl.Text = "✅  Loaded!"
 task.delay(3, function()
     if sg2 and sg2.Parent then sg2:Destroy() end
 end)
 
--- Clear key from memory
 getgenv().VHKey = nil
 ```
 
 ---
 
-## Your GitHub repo needs these files:
+Your GitHub repo now only needs:
 ```
 VanillaHub-Protected/
-├── loader.lua      ← the file above
-├── keys.txt        ← your keys list
-├── Vanilla1.lua
-├── Vanilla2.lua
-├── Vanilla3.lua
-├── Vanilla4.lua
-├── Vanilla5.lua
-├── Vanilla6.lua
-└── Vanilla7.lua
+├── loader.lua   ← the file above
+└── keys.txt     ← your keys list
