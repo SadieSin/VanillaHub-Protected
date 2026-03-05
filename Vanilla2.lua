@@ -89,18 +89,33 @@ local function collectAndLockCargo(tModel, ignoredParts, GiveBaseOrigin, Receive
     return cargoData
 end
 
--- Teleports all previously collected + locked cargo to its destination, then unanchors.
+-- Teleports all previously collected + locked cargo to its destination.
+-- Cargo is placed anchored so it stays stable on arrival, then unanchored
+-- after a 1-second settle delay so physics kicks in cleanly.
 local function commitCargo(cargoData)
+    -- Phase 1: move every piece to its target, keep it anchored
     for _, data in ipairs(cargoData) do
         pcall(function()
             if data.Instance and data.Instance.Parent then
                 data.Instance.CFrame                  = data.TargetCFrame
                 data.Instance.AssemblyLinearVelocity  = Vector3.zero
                 data.Instance.AssemblyAngularVelocity = Vector3.zero
-                data.Instance.Anchored                = false
+                data.Instance.Anchored                = true  -- stays locked at destination
             end
         end)
     end
+    -- Phase 2: after 1 second, unanchor everything so it settles naturally
+    task.delay(1, function()
+        for _, data in ipairs(cargoData) do
+            pcall(function()
+                if data.Instance and data.Instance.Parent then
+                    data.Instance.AssemblyLinearVelocity  = Vector3.zero
+                    data.Instance.AssemblyAngularVelocity = Vector3.zero
+                    data.Instance.Anchored                = false
+                end
+            end)
+        end
+    end)
 end
 
 -- ════════════════════════════════════════════════════
@@ -820,22 +835,24 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
                         if p:IsA("BasePart") then ignoredParts[p] = true end
                     end
 
-                    -- Sit in the truck
-                    driveSeat:Sit(Char.Humanoid)
-                    local sitTimeout = 0
-                    repeat task.wait(0.05); sitTimeout += 0.05; driveSeat:Sit(Char.Humanoid)
-                    until Char.Humanoid.SeatPart or sitTimeout > 5
-
-                    if not Char.Humanoid.SeatPart then
+                    -- Compute destination CFrame BEFORE anything moves
+                    local mainPart   = tModel:FindFirstChild("Main")
+                    local truckSrcCF = mainPart and mainPart.CFrame
+                    if not truckSrcCF then
+                        local anyPart = tModel:FindFirstChildOfClass("BasePart")
+                        if anyPart then truckSrcCF = anyPart.CFrame end
+                    end
+                    if not truckSrcCF then
                         truckDone += 1; setProgTrucks(truckDone, truckCount); continue
                     end
-
-                    -- Compute destination CFrame
-                    local mainPart = tModel:FindFirstChild("Main")
-                    local truckSrcCF   = mainPart and mainPart.CFrame or tModel:GetPrimaryPartCFrame()
                     local truckDestPos = truckSrcCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                     local truckDestCF  = CFrame.new(truckDestPos) * truckSrcCF.Rotation
                     table.insert(truckDestPositions, truckDestPos)
+
+                    -- Look up door hinge NOW while model is intact
+                    local DoorHinge = tModel:FindFirstChild("PaintParts")
+                        and tModel.PaintParts:FindFirstChild("DoorLeft")
+                        and tModel.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
 
                     -- Collect and anchor cargo synchronously BEFORE the truck moves
                     local cargoData = collectAndLockCargo(tModel, ignoredParts, GiveBaseOrigin, ReceiverBaseOrigin)
@@ -844,21 +861,12 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
                     end
 
                     -- Teleport the entire truck atomically (all parts + zero velocity)
+                    -- No sitting needed in the full dupe path — we own the model
                     teleportModelInstant(tModel, truckDestCF)
 
-                    -- Exit the seat cleanly
-                    local SitPart  = Char.Humanoid.SeatPart
-                    local DoorHinge = SitPart and SitPart.Parent:FindFirstChild("PaintParts")
-                        and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-                        and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
-
-                    task.wait(0.5)
-                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    task.wait(0.1)
-                    if SitPart then SitPart:Destroy() end
-                    task.wait(0.1)
+                    task.wait(0.3)
                     if DoorHinge then
-                        for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
+                        for i = 1, 10 do pcall(function() RS.Interaction.RemoteProxy:FireServer(DoorHinge) end) end
                     end
 
                     truckDone += 1; setProgTrucks(truckDone, truckCount)
@@ -1169,40 +1177,61 @@ createDBtn("Teleport My Truck", Color3.fromRGB(60,40,100), function()
     setSTStatus("Teleporting truck...", true)
 
     task.spawn(function()
+        -- Snapshot seat + model refs immediately before any yields
+        local savedSeatPart = seatPart
+        local savedModel    = tModel
+
         -- Build ignore set (truck parts + character)
         local ignoredParts = {}
-        for _, p in ipairs(tModel:GetDescendants()) do
+        for _, p in ipairs(savedModel:GetDescendants()) do
             if p:IsA("BasePart") then ignoredParts[p] = true end
         end
         for _, p in ipairs(Char:GetDescendants()) do
             if p:IsA("BasePart") then ignoredParts[p] = true end
         end
 
-        -- Compute destination CFrame
-        local mainPart     = tModel:FindFirstChild("Main")
-        local truckSrcCF   = mainPart and mainPart.CFrame or tModel:GetPrimaryPartCFrame()
+        -- Compute destination CFrame (read before anything moves)
+        local mainPart     = savedModel:FindFirstChild("Main")
+        local truckSrcCF   = mainPart and mainPart.CFrame
+        if not truckSrcCF then
+            local anyPart = savedModel:FindFirstChildOfClass("BasePart")
+            if anyPart then truckSrcCF = anyPart.CFrame end
+        end
+        if not truckSrcCF then
+            setSTStatus("Couldn't read truck CFrame!", false); return
+        end
         local truckDestPos = truckSrcCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
         local truckDestCF  = CFrame.new(truckDestPos) * truckSrcCF.Rotation
 
+        -- Look up door hinge NOW while model hierarchy is intact
+        local DoorHinge = savedModel:FindFirstChild("PaintParts")
+            and savedModel.PaintParts:FindFirstChild("DoorLeft")
+            and savedModel.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+
         -- Collect and anchor all cargo synchronously BEFORE the truck moves
-        local cargoData = collectAndLockCargo(tModel, ignoredParts, GiveBaseOrigin, ReceiverBaseOrigin)
+        local cargoData = collectAndLockCargo(savedModel, ignoredParts, GiveBaseOrigin, ReceiverBaseOrigin)
 
         -- Teleport the entire truck atomically (all parts + zero velocity)
-        teleportModelInstant(tModel, truckDestCF)
+        teleportModelInstant(savedModel, truckDestCF)
 
-        -- Commit cargo (move to destination + unanchor)
+        -- Commit cargo (place anchored at destination; unanchors after 1s via task.delay)
         commitCargo(cargoData)
 
-        -- Exit the seat cleanly
-        local DoorHinge = seatPart.Parent:FindFirstChild("PaintParts")
-            and seatPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-            and seatPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+        -- Unseat the player without destroying the seat (avoids killing the thread)
+        pcall(function() Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end)
+        task.wait(0.2)
+        -- Only destroy if still parented and player is actually sitting in it
+        pcall(function()
+            if savedSeatPart and savedSeatPart.Parent
+                and Char.Humanoid.SeatPart == savedSeatPart then
+                savedSeatPart:Destroy()
+            end
+        end)
+        task.wait(0.1)
 
-        task.wait(0.5)
-        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        task.wait(0.1); seatPart:Destroy(); task.wait(0.1)
+        -- Fire door hinge if found earlier
         if DoorHinge then
-            for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
+            for i = 1, 10 do pcall(function() RS.Interaction.RemoteProxy:FireServer(DoorHinge) end) end
         end
 
         -- Return player to giver's base
