@@ -508,7 +508,7 @@ runBtn.MouseButton1Click:Connect(function()
     local giverName    = getGiverName()
     local receiverName = getReceiverName()
     if giverName == "" or receiverName == "" then
-        setStatus("⚠ Select both players!", false) return
+        setStatus("Select both players!", false) return
     end
 
     butterRunning = true; VH.butter.running = true
@@ -533,7 +533,7 @@ runBtn.MouseButton1Click:Connect(function()
         end
 
         if not (GiveBaseOrigin and ReceiverBaseOrigin) then
-            setStatus("⚠ Couldn't find bases!", false)
+            setStatus("Couldn't find bases!", false)
             butterRunning = false; VH.butter.running = false; butterThread = nil; VH.butter.thread = nil
             return
         end
@@ -956,29 +956,31 @@ local stopTruckBtn = makeBtn(dupePage, "■  Stop", Color3.fromRGB(65, 25, 25), 
     if singleTruckThread then pcall(task.cancel, singleTruckThread); singleTruckThread = nil end
     setTruckStatus("Stopped", false)
     resetTruckProg()
+    stopTruckBtn.Visible = false
 end)
+stopTruckBtn.Visible = false
 
-makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
+makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(30, 55, 80), function()
     if singleTruckRunning then setTruckStatus("Already running!", true) return end
 
     local LP   = Players.LocalPlayer
     local Char = LP.Character
-    if not Char then setTruckStatus("⚠ No character found!", false) return end
+    if not Char then setTruckStatus("No character found!", false) return end
 
     local hum = Char:FindFirstChildOfClass("Humanoid")
     if not (hum and hum.SeatPart) then
-        setTruckStatus("⚠ Not sitting in a truck!", false) return
+        setTruckStatus("Not sitting in a truck!", false) return
     end
 
     local truckModel = hum.SeatPart.Parent
     if not truckModel:FindFirstChild("DriveSeat") then
-        setTruckStatus("⚠ Seat is not a truck DriveSeat!", false) return
+        setTruckStatus("Seat is not a truck DriveSeat!", false) return
     end
 
     local gName = getTruckGiverName()
     local rName = getTruckReceiverName()
     if gName == "" or rName == "" then
-        setTruckStatus("⚠ Select both players!", false) return
+        setTruckStatus("Select both players!", false) return
     end
 
     local GiveBaseOrigin, ReceiverBaseOrigin
@@ -990,10 +992,11 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
         end
     end
 
-    if not GiveBaseOrigin     then setTruckStatus("⚠ Giver base not found!",    false) return end
-    if not ReceiverBaseOrigin then setTruckStatus("⚠ Receiver base not found!", false) return end
+    if not GiveBaseOrigin     then setTruckStatus("Giver base not found!",    false) return end
+    if not ReceiverBaseOrigin then setTruckStatus("Receiver base not found!", false) return end
 
     singleTruckRunning = true
+    stopTruckBtn.Visible = true
     resetTruckProg()
     setTruckStatus("Sending truck...", true)
 
@@ -1128,19 +1131,20 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
             end
 
             if #missedList == 0 then
-                setTruckStatus("✓ All cargo teleported!", true)
+                setTruckStatus("All cargo teleported!", true)
             else
                 setTruckStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
             end
 
             setTruckProg(cargoTotal, cargoTotal)
         else
-            setTruckStatus("✓ Truck teleported! (no cargo found)", false)
+            setTruckStatus("Truck teleported! (no cargo found)", false)
         end
 
         task.wait(1)
         singleTruckRunning = false
         singleTruckThread  = nil
+        stopTruckBtn.Visible = false
     end)
 end)
 
