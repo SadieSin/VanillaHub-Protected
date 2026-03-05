@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════
--- VANILLA2 — World Tab + Dupe Tab
+-- VANILLA2 — World Tab + Dupe Tab (with Butter Leak)
 -- Imports shared state from Vanilla1 via _G.VH
 -- ════════════════════════════════════════════════════
 
@@ -186,38 +186,25 @@ local function createDSep()
     s.Size = UDim2.new(1,-12,0,1); s.BackgroundColor3 = Color3.fromRGB(40,40,55); s.BorderSizePixel = 0
 end
 
-local function createDBtn(text, color, callback)
-    color = color or BTN_COLOR
-    local btn = Instance.new("TextButton", dupePage)
-    btn.Size = UDim2.new(1,-12,0,32); btn.BackgroundColor3 = color
-    btn.Text = text; btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13
-    btn.TextColor3 = THEME_TEXT; btn.BorderSizePixel = 0
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
-    local hov = Color3.fromRGB(math.min(color.R*255+20,255)/255, math.min(color.G*255+8,255)/255, math.min(color.B*255+20,255)/255)
-    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3=hov}):Play() end)
-    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3=color}):Play() end)
-    btn.MouseButton1Click:Connect(callback)
-    return btn
-end
-
-local function createDToggle(text, default, callback)
+-- ── Dupe Toggle ───────────────────────────────────────
+local function createDupeToggle(text, defaultState, callback)
     local frame = Instance.new("Frame", dupePage)
     frame.Size = UDim2.new(1,-12,0,32); frame.BackgroundColor3 = Color3.fromRGB(24,24,30)
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,6)
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
     local lbl = Instance.new("TextLabel", frame)
     lbl.Size = UDim2.new(1,-50,1,0); lbl.Position = UDim2.new(0,10,0,0)
     lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.Font = Enum.Font.GothamSemibold
     lbl.TextSize = 13; lbl.TextColor3 = THEME_TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
     local tb = Instance.new("TextButton", frame)
     tb.Size = UDim2.new(0,34,0,18); tb.Position = UDim2.new(1,-44,0.5,-9)
-    tb.BackgroundColor3 = default and Color3.fromRGB(60,180,60) or BTN_COLOR
+    tb.BackgroundColor3 = defaultState and Color3.fromRGB(60,180,60) or BTN_COLOR
     tb.Text = ""; Instance.new("UICorner", tb).CornerRadius = UDim.new(1,0)
     local circle = Instance.new("Frame", tb)
     circle.Size = UDim2.new(0,14,0,14)
-    circle.Position = UDim2.new(0, default and 18 or 2, 0.5, -7)
+    circle.Position = UDim2.new(0, defaultState and 18 or 2, 0.5, -7)
     circle.BackgroundColor3 = Color3.fromRGB(255,255,255)
     Instance.new("UICorner", circle).CornerRadius = UDim.new(1,0)
-    local toggled = default
+    local toggled = defaultState
     if callback then callback(toggled) end
     tb.MouseButton1Click:Connect(function()
         toggled = not toggled
@@ -232,6 +219,111 @@ local function createDToggle(text, default, callback)
     return frame, function() return toggled end
 end
 
+-- ── Dupe Button ───────────────────────────────────────
+local function createDupeBtn(text, color)
+    color = color or BTN_COLOR
+    local btn = Instance.new("TextButton", dupePage)
+    btn.Size = UDim2.new(1,-12,0,34)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    btn.TextColor3 = THEME_TEXT
+    btn.BorderSizePixel = 0
+    btn.AutoButtonColor = false
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+    local hov = Color3.fromRGB(
+        math.min(color.R*255+25,255)/255,
+        math.min(color.G*255+10,255)/255,
+        math.min(color.B*255+20,255)/255
+    )
+    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3=hov}):Play() end)
+    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3=color}):Play() end)
+    return btn
+end
+
+-- ── Status Pill ───────────────────────────────────────
+local function createDupeStatus()
+    local bar = Instance.new("Frame", dupePage)
+    bar.Size = UDim2.new(1,-12,0,26)
+    bar.BackgroundColor3 = Color3.fromRGB(18,18,26)
+    bar.BorderSizePixel = 0
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0,6)
+    local stroke = Instance.new("UIStroke", bar)
+    stroke.Color = Color3.fromRGB(50,50,70); stroke.Thickness = 1; stroke.Transparency = 0.4
+    local dot = Instance.new("Frame", bar)
+    dot.Size = UDim2.new(0,7,0,7); dot.Position = UDim2.new(0,10,0.5,-3)
+    dot.BackgroundColor3 = Color3.fromRGB(100,100,130); dot.BorderSizePixel = 0
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
+    local stxt = Instance.new("TextLabel", bar)
+    stxt.Size = UDim2.new(1,-28,1,0); stxt.Position = UDim2.new(0,24,0,0); stxt.BackgroundTransparency = 1
+    stxt.Font = Enum.Font.Gotham; stxt.TextSize = 11; stxt.TextColor3 = Color3.fromRGB(140,140,160)
+    stxt.TextXAlignment = Enum.TextXAlignment.Left; stxt.Text = "Ready"
+    return bar, stxt, dot
+end
+
+-- ── Progress Block ────────────────────────────────────
+local function createDupeProgress(labelText)
+    local container = Instance.new("Frame", dupePage)
+    container.Size = UDim2.new(1,-12,0,42)
+    container.BackgroundColor3 = Color3.fromRGB(22,22,30)
+    container.BorderSizePixel = 0
+    container.Visible = false
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0,7)
+    Instance.new("UIStroke", container).Color = Color3.fromRGB(50,50,70)
+
+    local labelLbl = Instance.new("TextLabel", container)
+    labelLbl.Size = UDim2.new(0.6,0,0,18); labelLbl.Position = UDim2.new(0,10,0,4)
+    labelLbl.BackgroundTransparency = 1; labelLbl.Font = Enum.Font.GothamSemibold
+    labelLbl.TextSize = 11; labelLbl.TextColor3 = THEME_TEXT
+    labelLbl.TextXAlignment = Enum.TextXAlignment.Left; labelLbl.Text = labelText
+
+    local counterLbl = Instance.new("TextLabel", container)
+    counterLbl.Size = UDim2.new(0.4,-10,0,18); counterLbl.Position = UDim2.new(0.6,0,0,4)
+    counterLbl.BackgroundTransparency = 1; counterLbl.Font = Enum.Font.GothamBold
+    counterLbl.TextSize = 11; counterLbl.TextColor3 = Color3.fromRGB(120,180,255)
+    counterLbl.TextXAlignment = Enum.TextXAlignment.Right; counterLbl.Text = "0 / 0"
+
+    local track = Instance.new("Frame", container)
+    track.Size = UDim2.new(1,-16,0,8); track.Position = UDim2.new(0,8,0,26)
+    track.BackgroundColor3 = Color3.fromRGB(28,28,38); track.BorderSizePixel = 0
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
+
+    local fill = Instance.new("Frame", track)
+    fill.Size = UDim2.new(0,0,1,0)
+    fill.BackgroundColor3 = Color3.fromRGB(100,140,255); fill.BorderSizePixel = 0
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
+
+    local DONE_COLOR = Color3.fromRGB(60,200,110)
+    local BASE_COLOR = Color3.fromRGB(100,140,255)
+
+    local function setProgress(done, total)
+        local pct = math.clamp(done / math.max(total,1), 0, 1)
+        counterLbl.Text = done .. " / " .. total .. " left"
+        local barColor = pct >= 1 and DONE_COLOR or Color3.fromRGB(
+            math.floor(BASE_COLOR.R*255 + (DONE_COLOR.R*255 - BASE_COLOR.R*255)*pct)/255,
+            math.floor(BASE_COLOR.G*255 + (DONE_COLOR.G*255 - BASE_COLOR.G*255)*pct)/255,
+            math.floor(BASE_COLOR.B*255 + (DONE_COLOR.B*255 - BASE_COLOR.B*255)*pct)/255
+        )
+        TweenService:Create(fill, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {
+            Size = UDim2.new(pct, 0, 1, 0),
+            BackgroundColor3 = barColor
+        }):Play()
+    end
+
+    local function reset()
+        fill.Size = UDim2.new(0,0,1,0)
+        fill.BackgroundColor3 = BASE_COLOR
+        counterLbl.Text = "0 / 0"
+        container.Visible = false
+    end
+
+    return container, setProgress, reset
+end
+
+-- ════════════════════════════════════════════════════
+-- DUPE TAB — Player Dropdowns
+-- ════════════════════════════════════════════════════
 local function makeDupeDropdown(labelText, parentPage)
     parentPage = parentPage or dupePage
     local selected  = ""
@@ -490,6 +582,10 @@ local function makeDupeDropdown(labelText, parentPage)
     return outer, function() return selected end
 end
 
+-- ════════════════════════════════════════════════════
+-- BUILD DUPE TAB UI
+-- ════════════════════════════════════════════════════
+
 createDSection("Players")
 local _, getGiverName    = makeDupeDropdown("Giver")
 local _, getReceiverName = makeDupeDropdown("Receiver")
@@ -497,115 +593,77 @@ local _, getReceiverName = makeDupeDropdown("Receiver")
 createDSep()
 createDSection("What to Transfer")
 
-local _, getStructures = createDToggle("Structures",      false)
-local _, getFurniture  = createDToggle("Furniture",       false)
-local _, getTrucks     = createDToggle("Truck Load",      false)
-local _, getDupeItems  = createDToggle("Purchased Items", false)
-local _, getGifs       = createDToggle("Gift Items",      false)
-local _, getWood       = createDToggle("Wood",            false)
+local _, getStructures = createDupeToggle("Structures",      false)
+local _, getFurniture  = createDupeToggle("Furniture",       false)
+local _, getTrucks     = createDupeToggle("Trucks + Cargo",  false)
+local _, getItems      = createDupeToggle("Purchased Items", false)
+local _, getGifs       = createDupeToggle("Gif Items",       false)
+local _, getWood       = createDupeToggle("Wood",            false)
 
 createDSep()
-createDSection("Status")
+createDSection("Progress")
 
-local dupeStatusFrame = Instance.new("Frame", dupePage)
-dupeStatusFrame.Size = UDim2.new(1,-12,0,28); dupeStatusFrame.BackgroundColor3 = Color3.fromRGB(14,14,18)
-dupeStatusFrame.BorderSizePixel = 0
-Instance.new("UICorner", dupeStatusFrame).CornerRadius = UDim.new(0,6)
-local sdot = Instance.new("Frame", dupeStatusFrame)
-sdot.Size = UDim2.new(0,7,0,7); sdot.Position = UDim2.new(0,10,0.5,-3)
-sdot.BackgroundColor3 = Color3.fromRGB(80,80,100); sdot.BorderSizePixel = 0
-Instance.new("UICorner", sdot).CornerRadius = UDim.new(1,0)
-local dupeStatusLbl = Instance.new("TextLabel", dupeStatusFrame)
-dupeStatusLbl.Size = UDim2.new(1,-28,1,0); dupeStatusLbl.Position = UDim2.new(0,24,0,0)
-dupeStatusLbl.BackgroundTransparency = 1; dupeStatusLbl.Font = Enum.Font.Gotham; dupeStatusLbl.TextSize = 12
-dupeStatusLbl.TextColor3 = THEME_TEXT; dupeStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
-dupeStatusLbl.Text = "Ready"
-
-local function setDupeStatus(msg, active)
-    dupeStatusLbl.Text = msg
-    sdot.BackgroundColor3 = active and Color3.fromRGB(80,200,120) or Color3.fromRGB(80,80,100)
-end
-
-local function makeDupeProgress(labelText)
-    local container = Instance.new("Frame", dupePage)
-    container.Size = UDim2.new(1,-12,0,44); container.BackgroundColor3 = Color3.fromRGB(18,18,24)
-    container.BorderSizePixel = 0; container.Visible = false
-    Instance.new("UICorner", container).CornerRadius = UDim.new(0,7)
-    local topLbl = Instance.new("TextLabel", container)
-    topLbl.Size = UDim2.new(0.6,0,0,18); topLbl.Position = UDim2.new(0,10,0,4)
-    topLbl.BackgroundTransparency = 1; topLbl.Font = Enum.Font.GothamSemibold; topLbl.TextSize = 11
-    topLbl.TextColor3 = THEME_TEXT; topLbl.TextXAlignment = Enum.TextXAlignment.Left
-    topLbl.Text = labelText
-    local cntLbl = Instance.new("TextLabel", container)
-    cntLbl.Size = UDim2.new(0.4,-10,0,18); cntLbl.Position = UDim2.new(0.6,0,0,4)
-    cntLbl.BackgroundTransparency = 1; cntLbl.Font = Enum.Font.GothamBold; cntLbl.TextSize = 11
-    cntLbl.TextColor3 = Color3.fromRGB(120,160,255); cntLbl.TextXAlignment = Enum.TextXAlignment.Right
-    cntLbl.Text = "0 / 0"
-    local track = Instance.new("Frame", container)
-    track.Size = UDim2.new(1,-16,0,8); track.Position = UDim2.new(0,8,0,26)
-    track.BackgroundColor3 = Color3.fromRGB(30,30,42); track.BorderSizePixel = 0
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
-    local fill = Instance.new("Frame", track)
-    fill.Size = UDim2.new(0,0,1,0); fill.BackgroundColor3 = Color3.fromRGB(80,180,255); fill.BorderSizePixel = 0
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
-    local function setProgress(done, total)
-        local pct = math.clamp(done / math.max(total,1), 0, 1)
-        cntLbl.Text = done .. " / " .. total
-        local green = Color3.fromRGB(60,200,110)
-        local blue  = Color3.fromRGB(80,180,255)
-        local col = pct >= 1 and green or Color3.fromRGB(
-            math.floor(blue.R*255 + (green.R*255 - blue.R*255)*pct)/255,
-            math.floor(blue.G*255 + (green.G*255 - blue.G*255)*pct)/255,
-            math.floor(blue.B*255 + (green.B*255 - blue.B*255)*pct)/255
-        )
-        TweenService:Create(fill, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            Size = UDim2.new(pct,0,1,0), BackgroundColor3 = col
-        }):Play()
-    end
-    local function reset()
-        fill.Size = UDim2.new(0,0,1,0); fill.BackgroundColor3 = Color3.fromRGB(80,180,255)
-        cntLbl.Text = "0 / 0"; container.Visible = false
-    end
-    return container, setProgress, reset
-end
-
-local progStructures, setProgStructures, resetProgStructures = makeDupeProgress("Structures")
-local progFurniture,  setProgFurniture,  resetProgFurniture  = makeDupeProgress("Furniture")
-local progTrucks,     setProgTrucks,     resetProgTrucks     = makeDupeProgress("Truck Load")
-local progItems,      setProgItems,      resetProgItems      = makeDupeProgress("Purchased Items")
-local progGifs,       setProgGifs,       resetProgGifs       = makeDupeProgress("Gift Items")
-local progWood,       setProgWood,       resetProgWood       = makeDupeProgress("Wood")
+local progStructures, setProgStructures, resetProgStructures = createDupeProgress("Structures")
+local progFurniture,  setProgFurniture,  resetProgFurniture  = createDupeProgress("Furniture")
+local progTrucks,     setProgTrucks,     resetProgTrucks     = createDupeProgress("Trucks + Cargo")
+local progItems,      setProgItems,      resetProgItems      = createDupeProgress("Purchased Items")
+local progGifs,       setProgGifs,       resetProgGifs       = createDupeProgress("Gif Items")
+local progWood,       setProgWood,       resetProgWood       = createDupeProgress("Wood")
 
 createDSep()
 
-local function resetAllDupeProgress()
+local statusBar, statusTxt, statusDot = createDupeStatus()
+
+local runBtn  = createDupeBtn("▶  Run Butter Leak", Color3.fromRGB(38,80,52))
+local stopBtn = createDupeBtn("■  Stop",            Color3.fromRGB(80,30,30))
+
+-- ════════════════════════════════════════════════════
+-- BUTTER LEAK LOGIC
+-- ════════════════════════════════════════════════════
+
+local butterRunning = false
+local butterThread  = nil
+
+local function setStatus(msg, active)
+    statusTxt.Text = msg
+    statusDot.BackgroundColor3 = active
+        and Color3.fromRGB(80,200,120)
+        or  Color3.fromRGB(100,100,130)
+end
+
+local function resetAllProgress()
     resetProgStructures(); resetProgFurniture(); resetProgTrucks()
-    resetProgItems(); resetProgGifs(); resetProgWood()
+    resetProgItems();      resetProgGifs();      resetProgWood()
 end
 
-table.insert(cleanupTasks, function()
-    if _G.VH and _G.VH.butter then
-        _G.VH.butter.running = false
-        if _G.VH.butter.thread then
-            pcall(task.cancel, _G.VH.butter.thread)
-            _G.VH.butter.thread = nil
-        end
-    end
-    setDupeStatus("Stopped", false)
-    resetAllDupeProgress()
+stopBtn.MouseButton1Click:Connect(function()
+    butterRunning = false
+    if butterThread then task.cancel(butterThread) end
+    butterThread = nil
+    setStatus("Stopped", false)
+    resetAllProgress()
 end)
 
-createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
-    if _G.VH.butter.running then setDupeStatus("Already running!", true) return end
+runBtn.MouseButton1Click:Connect(function()
+    if butterRunning then setStatus("Already running!", true) return end
+
     local giverName    = getGiverName()
     local receiverName = getReceiverName()
-    if giverName == "" or receiverName == "" then setDupeStatus("Select both players!", false) return end
 
-    _G.VH.butter.running = true
-    setDupeStatus("Finding bases...", true)
-    resetAllDupeProgress()
+    if giverName == "" or receiverName == "" then
+        setStatus("⚠ Select both players first!", false)
+        return
+    end
+    if giverName == receiverName then
+        setStatus("⚠ Giver and Receiver must differ!", false)
+        return
+    end
 
-    _G.VH.butter.thread = task.spawn(function()
+    butterRunning = true
+    setStatus("Finding bases...", true)
+    resetAllProgress()
+
+    butterThread = task.spawn(function()
         local RS   = game:GetService("ReplicatedStorage")
         local LP   = Players.LocalPlayer
         local Char = LP.Character or LP.CharacterAdded:Wait()
@@ -621,45 +679,56 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
         end
 
         if not (GiveBaseOrigin and ReceiverBaseOrigin) then
-            setDupeStatus("Couldn't find bases!", false); _G.VH.butter.running=false; return
+            setStatus("⚠ Couldn't find bases!", false)
+            butterRunning = false
+            return
         end
 
         local function isPointInside(point, boxCFrame, boxSize)
             local r = boxCFrame:PointToObjectSpace(point)
-            return math.abs(r.X)<=boxSize.X/2 and math.abs(r.Y)<=boxSize.Y/2+2 and math.abs(r.Z)<=boxSize.Z/2
+            return math.abs(r.X) <= boxSize.X/2
+               and math.abs(r.Y) <= boxSize.Y/2 + 2
+               and math.abs(r.Z) <= boxSize.Z/2
         end
 
         local function countItems(typeCheck)
             local n = 0
             for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                if v.Name=="Owner" and tostring(v.Value)==giverName and typeCheck(v.Parent) then n+=1 end
+                if v.Name == "Owner" and tostring(v.Value) == giverName and typeCheck(v.Parent) then
+                    n += 1
+                end
             end
             return n
         end
 
+        -- ── STRUCTURES ────────────────────────────────────
         if getStructures() then
-            local total = countItems(function(p)
-                return p:FindFirstChild("Type") and tostring(p.Type.Value)=="Structure"
+            local function isStruct(p)
+                return p:FindFirstChild("Type")
+                    and tostring(p.Type.Value) == "Structure"
                     and (p:FindFirstChildOfClass("Part") or p:FindFirstChildOfClass("WedgePart"))
-            end)
+            end
+            local total = countItems(isStruct)
             if total > 0 then
-                progStructures.Visible=true; setProgStructures(0,total)
-                setDupeStatus("Sending structures...", true); local done=0
+                progStructures.Visible = true
+                setProgStructures(0, total)
+                setStatus("Sending structures...", true)
+                local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not _G.VH.butter.running then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName
-                            and v.Parent:FindFirstChild("Type") and tostring(v.Parent.Type.Value)=="Structure"
-                            and (v.Parent:FindFirstChildOfClass("Part") or v.Parent:FindFirstChildOfClass("WedgePart")) then
+                        if not butterRunning then break end
+                        if v.Name == "Owner" and tostring(v.Value) == giverName and isStruct(v.Parent) then
                             local PCF = (v.Parent:FindFirstChild("MainCFrame") and v.Parent.MainCFrame.Value)
                                 or v.Parent:FindFirstChildOfClass("Part").CFrame
                             local DA  = v.Parent:FindFirstChild("BlueprintWoodClass") and v.Parent.BlueprintWoodClass.Value or nil
                             local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                             local Off  = CFrame.new(nPos) * PCF.Rotation
                             repeat task.wait()
-                                pcall(function() RS.PlaceStructure.ClientPlacedStructure:FireServer(v.Parent.ItemName.Value, Off, LP, DA, v.Parent, true) end)
+                                pcall(function()
+                                    RS.PlaceStructure.ClientPlacedStructure:FireServer(v.Parent.ItemName.Value, Off, LP, DA, v.Parent, true)
+                                end)
                             until not v.Parent
-                            done+=1; setProgStructures(done, total)
+                            done += 1; setProgStructures(done, total)
                         end
                     end
                 end)
@@ -667,19 +736,23 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
             end
         end
 
-        if getFurniture() and _G.VH.butter.running then
-            local total = countItems(function(p)
-                return p:FindFirstChild("Type") and tostring(p.Type.Value)=="Furniture" and p:FindFirstChildOfClass("Part")
-            end)
+        -- ── FURNITURE ─────────────────────────────────────
+        if getFurniture() and butterRunning then
+            local function isFurn(p)
+                return p:FindFirstChild("Type")
+                    and tostring(p.Type.Value) == "Furniture"
+                    and p:FindFirstChildOfClass("Part")
+            end
+            local total = countItems(isFurn)
             if total > 0 then
-                progFurniture.Visible=true; setProgFurniture(0,total)
-                setDupeStatus("Sending furniture...", true); local done=0
+                progFurniture.Visible = true
+                setProgFurniture(0, total)
+                setStatus("Sending furniture...", true)
+                local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not _G.VH.butter.running then break end
-                        if v.Name=="Owner" and tostring(v.Value)==giverName
-                            and v.Parent:FindFirstChild("Type") and tostring(v.Parent.Type.Value)=="Furniture"
-                            and v.Parent:FindFirstChildOfClass("Part") then
+                        if not butterRunning then break end
+                        if v.Name == "Owner" and tostring(v.Value) == giverName and isFurn(v.Parent) then
                             local PCF = (v.Parent:FindFirstChild("MainCFrame") and v.Parent.MainCFrame.Value)
                                 or (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
                                 or v.Parent:FindFirstChildOfClass("Part").CFrame
@@ -687,9 +760,11 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
                             local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
                             local Off  = CFrame.new(nPos) * PCF.Rotation
                             repeat task.wait()
-                                pcall(function() RS.PlaceStructure.ClientPlacedStructure:FireServer(v.Parent.ItemName.Value, Off, LP, DA, v.Parent, true) end)
+                                pcall(function()
+                                    RS.PlaceStructure.ClientPlacedStructure:FireServer(v.Parent.ItemName.Value, Off, LP, DA, v.Parent, true)
+                                end)
                             until not v.Parent
-                            done+=1; setProgFurniture(done, total)
+                            done += 1; setProgFurniture(done, total)
                         end
                     end
                 end)
@@ -697,219 +772,155 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
             end
         end
 
-        local teleportedParts  = {}
-        local ignoredParts     = {}
-        local truckDestPositions = {}
-        local ABOVE_TRUCK_Y = 2.70
+        -- ── TRUCKS + CARGO ────────────────────────────────
+        local teleportedParts = {}
+        local ignoredParts    = {}
+        local DidTruckTeleport = false
 
-        if getTrucks() and _G.VH.butter.running then
-            local giverTrucks = {}
+        local function TeleportTruck()
+            if DidTruckTeleport then return end
+            if not Char.Humanoid.SeatPart then return end
+            local TCF  = Char.Humanoid.SeatPart.Parent:FindFirstChild("Main").CFrame
+            local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+            Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
+            DidTruckTeleport = true
+        end
+
+        if getTrucks() and butterRunning then
+            local truckCount = 0
             for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                if v.Name == "Owner" and tostring(v.Value) == giverName then
-                    local model = v.Parent
-                    if model and model:FindFirstChild("DriveSeat") then
-                        table.insert(giverTrucks, model)
-                    end
+                if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
+                    truckCount += 1
                 end
             end
-
-            local truckCount = #giverTrucks
             if truckCount > 0 then
-                progTrucks.Visible = true; setProgTrucks(0, truckCount)
-                setDupeStatus("Sending trucks...", true)
+                progTrucks.Visible = true
+                setProgTrucks(0, truckCount)
+                setStatus("Sending trucks...", true)
                 local truckDone = 0
-
-                for _, tModel in ipairs(giverTrucks) do
-                    if not _G.VH.butter.running then break end
-                    if not (tModel and tModel.Parent) then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount); continue
-                    end
-
-                    local driveSeat = tModel:FindFirstChild("DriveSeat")
-                    if not driveSeat then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount); continue
-                    end
-
-                    for _, p in ipairs(tModel:GetDescendants()) do
-                        if p:IsA("BasePart") then ignoredParts[p] = true end
-                    end
-                    for _, p in ipairs(Char:GetDescendants()) do
-                        if p:IsA("BasePart") then ignoredParts[p] = true end
-                    end
-
-                    driveSeat:Sit(Char.Humanoid)
-                    local sitTimeout = 0
-                    repeat task.wait(0.05); sitTimeout += 0.05; driveSeat:Sit(Char.Humanoid)
-                    until Char.Humanoid.SeatPart or sitTimeout > 5
-
-                    if not Char.Humanoid.SeatPart then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount); continue
-                    end
-
-                    local mainPart = tModel:FindFirstChild("Main")
-                    local truckSrcCF = mainPart and mainPart.CFrame or tModel:GetPrimaryPartCFrame()
-                    local truckDestPos = truckSrcCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                    local truckDestCF  = CFrame.new(truckDestPos) * truckSrcCF.Rotation
-                    table.insert(truckDestPositions, truckDestPos)
-
-                    local mCF, mSz = tModel:GetBoundingBox()
-                    for _, part in ipairs(workspace:GetDescendants()) do
-                        if part:IsA("BasePart") and not ignoredParts[part]
-                            and (part.Name == "Main" or part.Name == "WoodSection") then
-                            if part:FindFirstChild("Weld") and part.Weld.Part1
-                                and part.Weld.Part1.Parent ~= part.Parent then continue end
-                            task.spawn(function()
-                                if isPointInside(part.Position, mCF, mSz) then
-                                    local PCF  = part.CFrame
-                                    local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                                    local tOff = CFrame.new(nPos) * PCF.Rotation
-                                    part.CFrame = tOff
-                                    table.insert(teleportedParts, {Instance=part, OldPos=PCF.Position, TargetCFrame=tOff})
+                for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
+                    if not butterRunning then break end
+                    if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
+                        v.Parent.DriveSeat:Sit(Char.Humanoid)
+                        repeat task.wait() v.Parent.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
+                        local tModel = Char.Humanoid.SeatPart.Parent
+                        local mCF, mSz = tModel:GetBoundingBox()
+                        for _, p in ipairs(tModel:GetDescendants()) do if p:IsA("BasePart") then ignoredParts[p]=true end end
+                        for _, p in ipairs(Char:GetDescendants())   do if p:IsA("BasePart") then ignoredParts[p]=true end end
+                        for _, part in ipairs(workspace:GetDescendants()) do
+                            if part:IsA("BasePart") and not ignoredParts[part] then
+                                if part.Name == "Main" or part.Name == "WoodSection" then
+                                    if part:FindFirstChild("Weld") and part.Weld.Part1.Parent ~= part.Parent then continue end
+                                    task.spawn(function()
+                                        if isPointInside(part.Position, mCF, mSz) then
+                                            TeleportTruck()
+                                            local PCF = part.CFrame
+                                            local nP  = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                                            local tOff = CFrame.new(nP) * PCF.Rotation
+                                            part.CFrame = tOff
+                                            table.insert(teleportedParts, {Instance=part, OldPos=part.Position, TargetCFrame=tOff})
+                                        end
+                                    end)
                                 end
-                            end)
+                            end
                         end
-                    end
-
-                    tModel:SetPrimaryPartCFrame(truckDestCF)
-
-                    local SitPart = Char.Humanoid.SeatPart
-                    local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
-                        and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-                        and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
-
-                    task.wait(0.5)
-                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    task.wait(0.1); SitPart:Destroy(); task.wait(0.1)
-                    if DoorHinge then
-                        for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
-                    end
-
-                    truckDone += 1; setProgTrucks(truckDone, truckCount)
-                end
-
-                -- ── Cargo Teleport System v2 ──────────────────
-                local CARGO_PROXIMITY  = 25
-                local CARGO_FAIL_FIRST = 5
-                local CARGO_FAIL_RETRY = 5
-                local CARGO_MAX_TRIES  = 4
-                local CARGO_DRAG_WAIT  = 0.6
-                local CARGO_MOVE_WAIT  = 0.1
-                local CARGO_RETRY_WAIT = 1.0
-
-                local function cargoIsAlive(inst)
-                    return inst ~= nil and inst.Parent ~= nil
-                end
-                local function cargoMoved(data, threshold)
-                    if not cargoIsAlive(data.Instance) then return true end
-                    return (data.Instance.Position - data.OldPos).Magnitude >= threshold
-                end
-                local function cargoMoveCharClose(item)
-                    local root = Char.HumanoidRootPart
-                    local tries = 0
-                    while cargoIsAlive(item) and (root.Position - item.Position).Magnitude > CARGO_PROXIMITY do
-                        tries += 1
-                        if tries > 50 then warn("[CargoV2] Gave up on: "..tostring(item)); return false end
-                        root.CFrame = CFrame.new(item.Position + Vector3.new(0, 3, 4))
-                        task.wait(CARGO_MOVE_WAIT)
-                    end
-                    return true
-                end
-                local function cargoAttempt(data)
-                    local item = data.Instance
-                    if not cargoIsAlive(item) then return true end
-                    if not cargoMoveCharClose(item) then return false end
-                    RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-                    task.wait(CARGO_DRAG_WAIT)
-                    if cargoIsAlive(item) then item.CFrame = data.TargetCFrame; return true end
-                    return false
-                end
-                local function cargoBuildRetry(list, threshold)
-                    local out = {}
-                    for _, data in ipairs(list) do
-                        if cargoIsAlive(data.Instance) and not cargoMoved(data, threshold) then
-                            table.insert(out, data)
+                        local SitPart   = Char.Humanoid.SeatPart
+                        local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
+                            and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
+                            and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+                        task.wait()
+                        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                        task.wait(0.1); SitPart:Destroy(); TeleportTruck(); DidTruckTeleport=false; task.wait(0.1)
+                        if DoorHinge then
+                            for i=1,10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
                         end
+                        truckDone += 1; setProgTrucks(truckDone, truckCount)
                     end
-                    return out
                 end
 
+                -- ── Retry missed cargo (new system) ──────────────
+                task.wait(1)
+                local retryList = {}
+                for _, data in ipairs(teleportedParts) do
+                    if data.Instance and data.Instance.Parent
+                        and (data.Instance.Position - data.OldPos).Magnitude < 5 then
+                        ignoredParts[data.Instance] = nil
+                        table.insert(retryList, data)
+                    end
+                end
                 local cargoTotal = #teleportedParts
+                local cargoDone  = cargoTotal - #retryList
                 if cargoTotal > 0 then
-                    task.wait(CARGO_RETRY_WAIT)
-                    local retryList = cargoBuildRetry(teleportedParts, CARGO_FAIL_FIRST)
-                    local cargoDone = cargoTotal - #retryList
+                    progTrucks.Visible = true
                     setProgTrucks(cargoDone, cargoTotal)
-                    local attempts = 0
-                    while #retryList > 0 and attempts < CARGO_MAX_TRIES and _G.VH.butter.running do
-                        attempts += 1
-                        setDupeStatus("Retrying "..#retryList.." cargo (pass "..attempts.."/"..CARGO_MAX_TRIES..")...", true)
-                        for _, data in ipairs(retryList) do
-                            if not _G.VH.butter.running then break end
-                            local ok, err = pcall(cargoAttempt, data)
-                            if ok then cargoDone += 1 end
-                            if not ok then warn("[CargoV2] "..tostring(err)) end
-                            setProgTrucks(cargoDone, cargoTotal)
+                end
+                repeat
+                    task.wait(1)
+                    retryList = {}
+                    for _, data in ipairs(teleportedParts) do
+                        if data.Instance and data.Instance.Parent
+                            and (data.Instance.Position - data.OldPos).Magnitude < 25 then
+                            table.insert(retryList, data)
                         end
-                        task.wait(CARGO_RETRY_WAIT)
-                        retryList = cargoBuildRetry(teleportedParts, CARGO_FAIL_RETRY)
                     end
                     if #retryList > 0 then
-                        warn("[CargoV2] "..#retryList.." part(s) unresolved after "..attempts.." passes.")
+                        setStatus("Retrying " .. #retryList .. " cargo...", true)
+                        for _, data in ipairs(retryList) do
+                            if not butterRunning then break end
+                            local item = data.Instance
+                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 do
+                                Char.HumanoidRootPart.CFrame = item.CFrame; task.wait(0.1)
+                            end
+                            RS.Interaction.ClientIsDragging:FireServer(item.Parent)
+                            task.wait(0.6)
+                            item.CFrame = data.TargetCFrame
+                            cargoDone = cargoTotal - #retryList
+                            setProgTrucks(cargoDone, cargoTotal)
+                        end
                     end
-                    setProgTrucks(cargoTotal, cargoTotal)
-                end
-            end
-
-            if _G.VH.butter.running and Char:FindFirstChild("HumanoidRootPart") then
-                setDupeStatus("Returning to giver slot...", true)
-                Char.HumanoidRootPart.CFrame = CFrame.new(GiveBaseOrigin.Position + Vector3.new(0, 5, 0))
-                task.wait(0.5)
+                until #retryList == 0 or not butterRunning
+                setProgTrucks(cargoTotal, cargoTotal)
             end
         end
 
-        local function getAboveTruckCFrame(srcPCF)
-            local basePos = (#truckDestPositions > 0)
-                and truckDestPositions[1]
-                or  (ReceiverBaseOrigin.Position)
-            return CFrame.new(basePos.X, basePos.Y + ABOVE_TRUCK_Y, basePos.Z) * srcPCF.Rotation
-        end
-
+        -- ── Send item helpers ──────────────────────────────
         local function seekNetOwn(part)
-            if not _G.VH.butter.running then return end
+            if not butterRunning then return end
             if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 25 then
                 Char.HumanoidRootPart.CFrame = part.CFrame; task.wait(0.1)
             end
-            for i = 1, 50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
+            for i=1,50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
         end
-
         local function sendItem(part, Offset)
-            if not _G.VH.butter.running then return end
+            if not butterRunning then return end
             if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 25 then
                 Char.HumanoidRootPart.CFrame = part.CFrame; task.wait(0.1)
             end
             seekNetOwn(part)
-            for i = 1, 200 do part.CFrame = Offset end
-            task.wait(0.5)
+            for i=1,200 do part.CFrame = Offset end
+            task.wait(0.2)
         end
 
-        if getDupeItems() and _G.VH.butter.running then
-            local total = countItems(function(p)
-                return p:FindFirstChild("PurchasedBoxItemName") and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
-            end)
+        -- ── PURCHASED ITEMS ───────────────────────────────
+        if getItems() and butterRunning then
+            local function isItem(p)
+                return p:FindFirstChild("PurchasedBoxItemName")
+                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
+            end
+            local total = countItems(isItem)
             if total > 0 then
                 progItems.Visible = true; setProgItems(0, total)
-                setDupeStatus("Sending purchased items (above truck)...", true)
-                local done = 0
+                setStatus("Sending purchased items...", true); local done=0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not _G.VH.butter.running then break end
-                        if v.Name == "Owner" and tostring(v.Value) == giverName
-                            and v.Parent:FindFirstChild("PurchasedBoxItemName") then
+                        if not butterRunning then break end
+                        if v.Name == "Owner" and tostring(v.Value) == giverName and isItem(v.Parent) then
                             local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
                             if not part then continue end
-                            local PCF = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
+                            local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
                                 or v.Parent:FindFirstChildOfClass("Part").CFrame
-                            sendItem(part, getAboveTruckCFrame(PCF))
+                            local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                            sendItem(part, CFrame.new(nPos) * PCF.Rotation)
                             done += 1; setProgItems(done, total)
                         end
                     end
@@ -918,25 +929,27 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
             end
         end
 
-        if getGifs() and _G.VH.butter.running then
-            local total = countItems(function(p)
-                return p:FindFirstChildOfClass("Script") and p:FindFirstChild("DraggableItem")
+        -- ── GIF ITEMS ─────────────────────────────────────
+        if getGifs() and butterRunning then
+            local function isGif(p)
+                return p:FindFirstChildOfClass("Script")
+                    and p:FindFirstChild("DraggableItem")
                     and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
-            end)
+            end
+            local total = countItems(isGif)
             if total > 0 then
                 progGifs.Visible = true; setProgGifs(0, total)
-                setDupeStatus("Sending gift items (above truck)...", true)
-                local done = 0
+                setStatus("Sending gif items...", true); local done=0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not _G.VH.butter.running then break end
-                        if v.Name == "Owner" and tostring(v.Value) == giverName
-                            and v.Parent:FindFirstChildOfClass("Script") and v.Parent:FindFirstChild("DraggableItem") then
+                        if not butterRunning then break end
+                        if v.Name == "Owner" and tostring(v.Value) == giverName and isGif(v.Parent) then
                             local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
                             if not part then continue end
-                            local PCF = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
+                            local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
                                 or v.Parent:FindFirstChildOfClass("Part").CFrame
-                            sendItem(part, getAboveTruckCFrame(PCF))
+                            local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                            sendItem(part, CFrame.new(nPos) * PCF.Rotation)
                             done += 1; setProgGifs(done, total)
                         end
                     end
@@ -945,311 +958,50 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
             end
         end
 
-        -- ── WOOD DUPE — 0.6s between logs, noclip-style Heartbeat approach ──────────
-        if getWood() and _G.VH.butter.running then
-            local total = countItems(function(p)
-                return p:FindFirstChild("TreeClass") and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
-            end)
+        -- ── WOOD ──────────────────────────────────────────
+        if getWood() and butterRunning then
+            local function isWood(p)
+                return p:FindFirstChild("TreeClass")
+                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
+            end
+            local total = countItems(isWood)
             if total > 0 then
-                progWood.Visible=true; setProgWood(0,total)
-                setDupeStatus("Sending wood...", true)
-                local done = 0
-                local RS2  = game:GetService("ReplicatedStorage")
-                local dragger2 = RS2:FindFirstChild("Interaction") and RS2.Interaction:FindFirstChild("ClientIsDragging")
-
+                progWood.Visible = true; setProgWood(0, total)
+                setStatus("Sending wood...", true); local done=0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not _G.VH.butter.running then break end
-                        if not (v.Name=="Owner" and tostring(v.Value)==giverName and v.Parent:FindFirstChild("TreeClass")) then continue end
-
-                        local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
-                        if not part then continue end
-
-                        local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame) or v.Parent:FindFirstChildOfClass("Part").CFrame
-                        local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                        local targetCF = CFrame.new(nPos) * PCF.Rotation
-                        local model = v.Parent
-
-                        if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 20 then
-                            Char.HumanoidRootPart.CFrame = part.CFrame * CFrame.new(0, 3, 3)
-                            task.wait(0.08)
+                        if not butterRunning then break end
+                        if v.Name == "Owner" and tostring(v.Value) == giverName and isWood(v.Parent) then
+                            local part = v.Parent:FindFirstChild("Main") or v.Parent:FindFirstChildOfClass("Part")
+                            if not part then continue end
+                            local PCF  = (v.Parent:FindFirstChild("Main") and v.Parent.Main.CFrame)
+                                or v.Parent:FindFirstChildOfClass("Part").CFrame
+                            local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                            if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 25 then
+                                Char.HumanoidRootPart.CFrame = part.CFrame; task.wait(0.1)
+                            end
+                            for i=1,50 do task.wait(0.05); RS.Interaction.ClientIsDragging:FireServer(part.Parent) end
+                            for i=1,200 do part.CFrame = CFrame.new(nPos) * PCF.Rotation end
+                            task.wait(0.2)
+                            done += 1; setProgWood(done, total)
                         end
-
-                        local startT = tick()
-                        local TIMEOUT = 2.0
-                        local CONFIRM = 5
-
-                        local conn
-                        local done2 = false
-                        conn = RunService.Heartbeat:Connect(function()
-                            if not (part and part.Parent) then
-                                conn:Disconnect(); done2 = true; return
-                            end
-                            if (Char.HumanoidRootPart.Position - part.Position).Magnitude > 20 then
-                                Char.HumanoidRootPart.CFrame = part.CFrame * CFrame.new(0, 3, 3)
-                            end
-                            pcall(function()
-                                for _, p in ipairs(Char:GetDescendants()) do
-                                    if p:IsA("BasePart") then p.CanCollide = false end
-                                end
-                            end)
-                            if dragger2 then pcall(function() dragger2:FireServer(model) end) end
-                            pcall(function() part.CFrame = targetCF end)
-                            local dist = (part.Position - targetCF.Position).Magnitude
-                            if dist < CONFIRM or (tick() - startT) >= TIMEOUT then
-                                conn:Disconnect(); done2 = true
-                            end
-                        end)
-
-                        local waitStart = tick()
-                        while not done2 and (tick() - waitStart) < 2.5 do
-                            task.wait()
-                        end
-                        if conn then pcall(function() conn:Disconnect() end) end
-
-                        pcall(function()
-                            for _, p in ipairs(Char:GetDescendants()) do
-                                if p:IsA("BasePart") then p.CanCollide = true end
-                            end
-                        end)
-
-                        done += 1; setProgWood(done, total)
-                        task.wait(0.6)
                     end
                 end)
                 setProgWood(total, total)
             end
         end
 
-        if _G.VH.butter.running then setDupeStatus("Done!", false) end
-        _G.VH.butter.running = false; _G.VH.butter.thread = nil
+        if butterRunning then setStatus("✓ Done!", false) end
+        butterRunning = false
+        butterThread  = nil
     end)
 end)
 
-createDBtn("Cancel Dupe", BTN_COLOR, function()
-    _G.VH.butter.running = false
-    if _G.VH.butter.thread then pcall(task.cancel, _G.VH.butter.thread) end
-    _G.VH.butter.thread = nil
-    setDupeStatus("Stopped", false)
-    resetAllDupeProgress()
-end)
-
--- ════════════════════════════════════════════════════
--- SINGLE TRUCK TELEPORT
--- How it works:
---   1. Select Giver and Receiver players from dropdowns
---   2. The Giver must be sitting in a truck on their base
---   3. Press "Teleport My Truck" — it teleports the truck
---      (and any cargo including wood) to the receiver's base.
---      Empty trucks are teleported even with no cargo.
--- ════════════════════════════════════════════════════
-createDSep()
-createDSection("Single Truck Teleport")
-
-local _, getSingleGiver    = makeDupeDropdown("Giver",    dupePage)
-local _, getSingleReceiver = makeDupeDropdown("Receiver", dupePage)
-
--- Status label
-local stFrame = Instance.new("Frame", dupePage)
-stFrame.Size = UDim2.new(1,-12,0,28); stFrame.BackgroundColor3 = Color3.fromRGB(14,14,18)
-stFrame.BorderSizePixel = 0
-Instance.new("UICorner", stFrame).CornerRadius = UDim.new(0,6)
-local stDot = Instance.new("Frame", stFrame)
-stDot.Size = UDim2.new(0,7,0,7); stDot.Position = UDim2.new(0,10,0.5,-3)
-stDot.BackgroundColor3 = Color3.fromRGB(80,80,100); stDot.BorderSizePixel = 0
-Instance.new("UICorner", stDot).CornerRadius = UDim.new(1,0)
-local stLbl = Instance.new("TextLabel", stFrame)
-stLbl.Size = UDim2.new(1,-28,1,0); stLbl.Position = UDim2.new(0,24,0,0)
-stLbl.BackgroundTransparency = 1; stLbl.Font = Enum.Font.Gotham; stLbl.TextSize = 12
-stLbl.TextColor3 = THEME_TEXT; stLbl.TextXAlignment = Enum.TextXAlignment.Left
-stLbl.Text = "Select Giver & Receiver, then press Teleport"
-
-local function setSTStatus(msg, active)
-    stLbl.Text = msg
-    stDot.BackgroundColor3 = active and Color3.fromRGB(80,200,120) or Color3.fromRGB(80,80,100)
-end
-
--- Teleport button
-createDBtn("Teleport My Truck", Color3.fromRGB(60,40,100), function()
-    local giverName    = getSingleGiver()
-    local receiverName = getSingleReceiver()
-    if giverName == "" then
-        setSTStatus("Select a giver first!", false); return
-    end
-    if receiverName == "" then
-        setSTStatus("Select a receiver first!", false); return
-    end
-
-    local RS   = game:GetService("ReplicatedStorage")
-    local LP   = Players.LocalPlayer
-    local Char = LP.Character or LP.CharacterAdded:Wait()
-    local hum  = Char:FindFirstChild("Humanoid")
-
-    -- Must be seated in a truck (SeatPart with DriveSeat)
-    local seatPart = hum and hum.SeatPart
-    if not seatPart or seatPart.Name ~= "DriveSeat" then
-        setSTStatus("You must be sitting in a truck!", false); return
-    end
-
-    local tModel = seatPart.Parent
-    if not tModel then
-        setSTStatus("Couldn't find truck model!", false); return
-    end
-
-    -- Find giver and receiver base origins
-    local GiveBaseOrigin, ReceiverBaseOrigin
-
-    for _, v in pairs(workspace.Properties:GetDescendants()) do
-        if v.Name == "Owner" then
-            local val = tostring(v.Value)
-            if val == giverName    then GiveBaseOrigin    = v.Parent:FindFirstChild("OriginSquare") end
-            if val == receiverName then ReceiverBaseOrigin = v.Parent:FindFirstChild("OriginSquare") end
-        end
-    end
-
-    if not GiveBaseOrigin then
-        setSTStatus("Couldn't find giver's base!", false); return
-    end
-    if not ReceiverBaseOrigin then
-        setSTStatus("Couldn't find receiver's base!", false); return
-    end
-
-    setSTStatus("Teleporting truck...", true)
-
-    task.spawn(function()
-        local ignoredParts    = {}
-        local teleportedParts = {}
-
-        -- Mark truck + char parts as ignored for cargo sweep
-        for _, p in ipairs(tModel:GetDescendants()) do
-            if p:IsA("BasePart") then ignoredParts[p] = true end
-        end
-        for _, p in ipairs(Char:GetDescendants()) do
-            if p:IsA("BasePart") then ignoredParts[p] = true end
-        end
-
-        -- Compute destination CFrame (same offset logic as full dupe)
-        local mainPart = tModel:FindFirstChild("Main")
-        local truckSrcCF   = mainPart and mainPart.CFrame or tModel:GetPrimaryPartCFrame()
-        local truckDestPos = truckSrcCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-        local truckDestCF  = CFrame.new(truckDestPos) * truckSrcCF.Rotation
-
-        -- Helper: point-in-bounding-box check
-        local function isPointInside(point, boxCFrame, boxSize)
-            local r = boxCFrame:PointToObjectSpace(point)
-            return math.abs(r.X)<=boxSize.X/2 and math.abs(r.Y)<=boxSize.Y/2+2 and math.abs(r.Z)<=boxSize.Z/2
-        end
-
-        -- Sweep cargo inside truck bounding box:
-        -- includes wood (WoodSection / TreeClass Main) AND normal cargo (Main)
-        local mCF, mSz = tModel:GetBoundingBox()
-        for _, part in ipairs(workspace:GetDescendants()) do
-            if part:IsA("BasePart") and not ignoredParts[part]
-                and (part.Name == "Main" or part.Name == "WoodSection") then
-                if part:FindFirstChild("Weld") and part.Weld.Part1
-                    and part.Weld.Part1.Parent ~= part.Parent then continue end
-                task.spawn(function()
-                    if isPointInside(part.Position, mCF, mSz) then
-                        local PCF  = part.CFrame
-                        local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                        local tOff = CFrame.new(nPos) * PCF.Rotation
-                        part.CFrame = tOff
-                        table.insert(teleportedParts, {Instance=part, OldPos=PCF.Position, TargetCFrame=tOff})
-                    end
-                end)
-            end
-        end
-
-        -- Teleport the truck itself (while still seated — same as full dupe)
-        tModel:SetPrimaryPartCFrame(truckDestCF)
-
-        -- Get door hinge for exit
-        local DoorHinge = seatPart.Parent:FindFirstChild("PaintParts")
-            and seatPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-            and seatPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
-
-        task.wait(0.5)
-        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        task.wait(0.1); seatPart:Destroy(); task.wait(0.1)
-        if DoorHinge then
-            for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
-        end
-
-        -- Return player to giver's base
-        task.wait(0.3)
-        pcall(function()
-            Char.HumanoidRootPart.CFrame = CFrame.new(GiveBaseOrigin.Position + Vector3.new(0, 5, 0))
-        end)
-
-        -- If there was no cargo, we're already done
-        if #teleportedParts == 0 then
-            setSTStatus("Truck teleported!", false)
-            return
-        end
-
-        -- ── Cargo Teleport System v2 ──────────────────────
-        local ST_PROXIMITY  = 25
-        local ST_FAIL_FIRST = 5
-        local ST_FAIL_RETRY = 5
-        local ST_MAX_TRIES  = 4
-        local ST_DRAG_WAIT  = 0.6
-        local ST_MOVE_WAIT  = 0.1
-        local ST_RETRY_WAIT = 1.0
-
-        local function stCargoIsAlive(inst) return inst ~= nil and inst.Parent ~= nil end
-        local function stCargoMoved(data, threshold)
-            if not stCargoIsAlive(data.Instance) then return true end
-            return (data.Instance.Position - data.OldPos).Magnitude >= threshold
-        end
-        local function stMoveCharClose(item)
-            local root = Char.HumanoidRootPart
-            local tries = 0
-            while stCargoIsAlive(item) and (root.Position - item.Position).Magnitude > ST_PROXIMITY do
-                tries += 1
-                if tries > 50 then warn("[CargoV2-ST] Gave up on: "..tostring(item)); return false end
-                root.CFrame = CFrame.new(item.Position + Vector3.new(0, 3, 4))
-                task.wait(ST_MOVE_WAIT)
-            end
-            return true
-        end
-        local function stCargoAttempt(data)
-            local item = data.Instance
-            if not stCargoIsAlive(item) then return true end
-            if not stMoveCharClose(item) then return false end
-            RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-            task.wait(ST_DRAG_WAIT)
-            if stCargoIsAlive(item) then item.CFrame = data.TargetCFrame; return true end
-            return false
-        end
-        local function stBuildRetry(list, threshold)
-            local out = {}
-            for _, data in ipairs(list) do
-                if stCargoIsAlive(data.Instance) and not stCargoMoved(data, threshold) then
-                    table.insert(out, data)
-                end
-            end
-            return out
-        end
-
-        task.wait(ST_RETRY_WAIT)
-        local stRetryList = stBuildRetry(teleportedParts, ST_FAIL_FIRST)
-        local stAttempts  = 0
-        while #stRetryList > 0 and stAttempts < ST_MAX_TRIES do
-            stAttempts += 1
-            setSTStatus("Retrying "..#stRetryList.." cargo (pass "..stAttempts.."/"..ST_MAX_TRIES..")...", true)
-            for _, data in ipairs(stRetryList) do
-                local ok, err = pcall(stCargoAttempt, data)
-                if not ok then warn("[CargoV2-ST] "..tostring(err)) end
-            end
-            task.wait(ST_RETRY_WAIT)
-            stRetryList = stBuildRetry(teleportedParts, ST_FAIL_RETRY)
-        end
-        if #stRetryList > 0 then
-            warn("[CargoV2-ST] "..#stRetryList.." part(s) unresolved after "..stAttempts.." passes.")
-        end
-
-        setSTStatus("Truck teleported!", false)
-    end)
+-- Cleanup on hub close
+table.insert(cleanupTasks, function()
+    butterRunning = false
+    if butterThread then pcall(function() task.cancel(butterThread) end) end
+    butterThread = nil
 end)
 
 print("[VanillaHub] Vanilla2 loaded")
