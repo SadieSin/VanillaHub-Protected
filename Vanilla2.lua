@@ -946,7 +946,21 @@ local function setTruckStatus(msg, active)
     }):Play()
 end
 
+local truckProgBar, setTruckProg, resetTruckProg = makeProgressBar(dupePage, "Truck + Cargo")
+
+local singleTruckRunning = false
+local singleTruckThread  = nil
+
+local stopTruckBtn = makeBtn(dupePage, "■  Stop", Color3.fromRGB(65, 25, 25), function()
+    singleTruckRunning = false
+    if singleTruckThread then pcall(task.cancel, singleTruckThread); singleTruckThread = nil end
+    setTruckStatus("Stopped", false)
+    resetTruckProg()
+end)
+
 makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
+    if singleTruckRunning then setTruckStatus("Already running!", true) return end
+
     local LP   = Players.LocalPlayer
     local Char = LP.Character
     if not Char then setTruckStatus("⚠ No character found!", false) return end
@@ -967,7 +981,6 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
         setTruckStatus("⚠ Select both players!", false) return
     end
 
-    -- Find base origins
     local GiveBaseOrigin, ReceiverBaseOrigin
     for _, v in pairs(workspace.Properties:GetDescendants()) do
         if v.Name == "Owner" then
@@ -977,16 +990,16 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
         end
     end
 
-    if not GiveBaseOrigin  then setTruckStatus("⚠ Giver base not found!",    false) return end
+    if not GiveBaseOrigin     then setTruckStatus("⚠ Giver base not found!",    false) return end
     if not ReceiverBaseOrigin then setTruckStatus("⚠ Receiver base not found!", false) return end
 
-    local mainPart = truckModel:FindFirstChild("Main")
-    if not mainPart then setTruckStatus("⚠ Truck has no Main part!", false) return end
+    singleTruckRunning = true
+    resetTruckProg()
+    setTruckStatus("Sending truck...", true)
 
-    task.spawn(function()
+    singleTruckThread = task.spawn(function()
         local RS = game:GetService("ReplicatedStorage")
 
-        -- Helper: is a point inside a bounding box?
         local function isPointInside(point, boxCFrame, boxSize)
             local r = boxCFrame:PointToObjectSpace(point)
             return math.abs(r.X) <= boxSize.X / 2
@@ -994,13 +1007,28 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
                and math.abs(r.Z) <= boxSize.Z / 2
         end
 
-        -- ── Phase 1: scan cargo inside the truck's bounding box ──────────────
-        setTruckStatus("Scanning cargo...", true)
+        local teleportedParts  = {}
+        local ignoredParts     = {}
+        local DidTruckTeleport = false
+
+        local function TeleportTruck()
+            if DidTruckTeleport then return end
+            if not Char.Humanoid.SeatPart then return end
+            local TCF  = Char.Humanoid.SeatPart.Parent:FindFirstChild("Main").CFrame
+            local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+            Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
+            DidTruckTeleport = true
+        end
+
+        -- Phase 1: sit in the truck, scan + teleport cargo, then eject
+        truckProgBar.Visible = true
+        setTruckProg(0, 1)
+
+        truckModel.DriveSeat:Sit(Char.Humanoid)
+        repeat task.wait() truckModel.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
 
         local mCF, mSz = truckModel:GetBoundingBox()
 
-        -- Parts belonging to the truck itself (ignore these during cargo scan)
-        local ignoredParts = {}
         for _, p in ipairs(truckModel:GetDescendants()) do
             if p:IsA("BasePart") then ignoredParts[p] = true end
         end
@@ -1008,93 +1036,111 @@ makeBtn(dupePage, "🚚  Teleport Truck", Color3.fromRGB(30, 55, 80), function()
             if p:IsA("BasePart") then ignoredParts[p] = true end
         end
 
-        local teleportedParts = {}
-
         for _, part in ipairs(workspace:GetDescendants()) do
+            if not singleTruckRunning then break end
             if part:IsA("BasePart") and not ignoredParts[part] then
                 if part.Name == "Main" or part.Name == "WoodSection" then
-                    if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then
-                        continue
-                    end
-                    if isPointInside(part.Position, mCF, mSz) then
-                        local PCF  = part.CFrame
-                        local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                        local tOff = CFrame.new(nP) * PCF.Rotation
-                        part.CFrame = tOff
-                        table.insert(teleportedParts, {
-                            Instance     = part,
-                            TargetCFrame = tOff,
-                        })
-                    end
+                    if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then continue end
+                    task.spawn(function()
+                        if isPointInside(part.Position, mCF, mSz) then
+                            TeleportTruck()
+                            local PCF  = part.CFrame
+                            local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                            local tOff = CFrame.new(nP) * PCF.Rotation
+                            part.CFrame = tOff
+                            task.wait(0.3)
+                            table.insert(teleportedParts, {
+                                Instance     = part,
+                                OldPos       = part.Position,
+                                TargetCFrame = tOff,
+                            })
+                        end
+                    end)
                 end
             end
         end
 
-        -- ── Teleport the truck itself ────────────────────────────────────────
-        setTruckStatus("Teleporting truck...", true)
-        local TCF  = mainPart.CFrame
-        local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-        pcall(function()
-            truckModel:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
-        end)
+        local SitPart   = Char.Humanoid.SeatPart
+        local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
+            and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
+            and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+        task.wait()
+        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        task.wait(0.1); SitPart:Destroy(); TeleportTruck(); DidTruckTeleport = false; task.wait(0.1)
+        if DoorHinge then
+            for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
+        end
+        setTruckProg(1, 1)
 
-        -- ── Phase 2: retry missed cargo up to 25 times ───────────────────────
-        task.wait(2) -- let spawned teleports settle
+        -- Phase 2: retry missed cargo up to 25 times
+        task.wait(2) -- give task.spawns time to finish recording
 
         local cargoTotal = #teleportedParts
-        if cargoTotal == 0 then
-            setTruckStatus("✓ Truck teleported! (no cargo found)", false)
-            return
-        end
+        local cargoDone  = 0
 
-        local MAX_TRIES = 25
-        local attempt   = 0
+        if cargoTotal > 0 then
+            truckProgBar.Visible = true
+            setTruckProg(0, cargoTotal)
 
-        local function getMissed()
-            local missed = {}
-            for _, data in ipairs(teleportedParts) do
-                if data.Instance and data.Instance.Parent then
-                    if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
-                        table.insert(missed, data)
+            local MAX_TRIES = 25
+            local attempt   = 0
+
+            local function getMissed()
+                local missed = {}
+                for _, data in ipairs(teleportedParts) do
+                    if data.Instance and data.Instance.Parent then
+                        if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
+                            table.insert(missed, data)
+                        end
                     end
                 end
+                return missed
             end
-            return missed
-        end
 
-        local missedList = getMissed()
+            local missedList = getMissed()
 
-        while #missedList > 0 and attempt < MAX_TRIES do
-            attempt += 1
-            setTruckStatus(string.format("Cargo retry %d/%d — %d left...", attempt, MAX_TRIES, #missedList), true)
+            while #missedList > 0 and singleTruckRunning and attempt < MAX_TRIES do
+                attempt += 1
+                setTruckStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
 
-            for _, data in ipairs(missedList) do
-                local item = data.Instance
-                if not (item and item.Parent) then continue end
+                for _, data in ipairs(missedList) do
+                    if not singleTruckRunning then break end
+                    local item = data.Instance
+                    if not (item and item.Parent) then continue end
 
-                -- Warp to the item to gain network ownership
-                local tries = 0
-                while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
-                    Char.HumanoidRootPart.CFrame = item.CFrame
-                    task.wait(0.1)
-                    tries += 1
+                    local tries = 0
+                    while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
+                        Char.HumanoidRootPart.CFrame = item.CFrame
+                        task.wait(0.1)
+                        tries += 1
+                    end
+
+                    RS.Interaction.ClientIsDragging:FireServer(item.Parent)
+                    task.wait(0.6)
+                    item.CFrame = data.TargetCFrame
+                    task.wait(0.2)
                 end
 
-                RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-                task.wait(0.6)
-                item.CFrame = data.TargetCFrame
-                task.wait(0.2)
+                task.wait(1)
+                missedList = getMissed()
+                cargoDone  = cargoTotal - #missedList
+                setTruckProg(cargoDone, cargoTotal)
             end
 
-            task.wait(1)
-            missedList = getMissed()
+            if #missedList == 0 then
+                setTruckStatus("✓ All cargo teleported!", true)
+            else
+                setTruckStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
+            end
+
+            setTruckProg(cargoTotal, cargoTotal)
+        else
+            setTruckStatus("✓ Truck teleported! (no cargo found)", false)
         end
 
-        if #missedList == 0 then
-            setTruckStatus("✓ Truck + all cargo teleported!", false)
-        else
-            setTruckStatus(string.format("Done — %d cargo part(s) missed after %d tries", #missedList, MAX_TRIES), false)
-        end
+        task.wait(1)
+        singleTruckRunning = false
+        singleTruckThread  = nil
     end)
 end)
 
