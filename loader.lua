@@ -1,6 +1,7 @@
 -- VanillaHub Protected Loader
 local KEY = getgenv().VHKey
-local LP = game:GetService("Players").LocalPlayer
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 
 local function fetch(url)
     local ok, result = pcall(function()
