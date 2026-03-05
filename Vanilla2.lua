@@ -761,6 +761,8 @@ runBtn.MouseButton1Click:Connect(function()
                             task.wait(0.6)
                             item.CFrame = data.TargetCFrame
                             task.wait(0.2)
+                            cargoDone += 1
+                            setProgTrucks(cargoDone, cargoTotal)
                         end
 
                         task.wait(1)
@@ -919,7 +921,7 @@ local truckProgBar, setTruckProg, resetTruckProg = makeProgressBar(dupePage, "Tr
 local singleTruckRunning = false
 local singleTruckThread  = nil
 
-local stopTruckBtn = makeBtn(dupePage, "■  Stop", Color3.fromRGB(65, 25, 25), function()
+local stopTruckBtn = makeBtn(dupePage, "Stop", Color3.fromRGB(55, 55, 65), function()
     singleTruckRunning = false
     if singleTruckThread then pcall(task.cancel, singleTruckThread); singleTruckThread = nil end
     setTruckStatus("Stopped", false)
@@ -928,7 +930,7 @@ local stopTruckBtn = makeBtn(dupePage, "■  Stop", Color3.fromRGB(65, 25, 25), 
 end)
 stopTruckBtn.Visible = false
 
-makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(30, 55, 80), function()
+makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
     if singleTruckRunning then setTruckStatus("Already running!", true) return end
 
     local LP   = Players.LocalPlayer
@@ -1090,6 +1092,8 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(30, 55, 80), function()
                     task.wait(0.6)
                     item.CFrame = data.TargetCFrame
                     task.wait(0.2)
+                    cargoDone += 1
+                    setTruckProg(cargoDone, cargoTotal)
                 end
 
                 task.wait(1)
