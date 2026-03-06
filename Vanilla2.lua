@@ -702,33 +702,38 @@ runBtn.MouseButton1Click:Connect(function()
                         if p:IsA("BasePart") then ignoredParts[p] = true end
                     end
 
-                    -- Snapshot workspace descendants NOW (before eject) so the
-                    -- bounding-box check uses the correct pre-teleport positions.
-                    local wsSnap = workspace:GetDescendants()
-
-                    for _, part in ipairs(wsSnap) do
+                    -- Snapshot workspace descendants AND their positions NOW,
+                    -- synchronously, before any yields so physics can't shift
+                    -- parts out of the bounding box before we check them.
+                    local cargoToMove = {}
+                    for _, part in ipairs(workspace:GetDescendants()) do
                         if part:IsA("BasePart") and not ignoredParts[part] then
                             if part.Name == "Main" or part.Name == "WoodSection" then
                                 if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then continue end
-                                -- Track each spawn so we know when they're all done
-                                pendingSpawns += 1
-                                task.spawn(function()
-                                    if isPointInside(part.Position, mCF, mSz) then
-                                        TeleportTruck()
-                                        local PCF  = part.CFrame
-                                        local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                                        local tOff = CFrame.new(nP) * PCF.Rotation
-                                        part.CFrame = tOff
-                                        task.wait(0.3)
-                                        table.insert(teleportedParts, {
-                                            Instance     = part,
-                                            TargetCFrame = tOff,
-                                        })
-                                    end
-                                    pendingSpawns -= 1
-                                end)
+                                -- Capture position synchronously right now
+                                local capturedCF = part.CFrame
+                                if isPointInside(capturedCF.Position, mCF, mSz) then
+                                    local nP   = capturedCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                                    local tOff = CFrame.new(nP) * capturedCF.Rotation
+                                    table.insert(cargoToMove, { part = part, tOff = tOff })
+                                end
                             end
                         end
+                    end
+
+                    -- Now spawn the actual teleports — position already confirmed above
+                    for _, cargo in ipairs(cargoToMove) do
+                        pendingSpawns += 1
+                        task.spawn(function()
+                            TeleportTruck()
+                            cargo.part.CFrame = cargo.tOff
+                            task.wait(0.3)
+                            table.insert(teleportedParts, {
+                                Instance     = cargo.part,
+                                TargetCFrame = cargo.tOff,
+                            })
+                            pendingSpawns -= 1
+                        end)
                     end
 
                     local SitPart   = Char.Humanoid.SeatPart
@@ -757,29 +762,20 @@ runBtn.MouseButton1Click:Connect(function()
                 local cargoDone  = 0
 
                 if cargoTotal > 0 then
-                    progTrucks.Visible = true
-                    setProgTrucks(0, cargoTotal)
-
                     local MAX_TRIES = 25
                     local attempt   = 0
 
-                    -- A piece is "missed" if it's more than 8 studs from where we
-                    -- tried to put it AND it isn't already sitting on the receiver
-                    -- plot (i.e. don't re-teleport things that landed correctly but
-                    -- physics moved them slightly within the plot).
-                    local recCF, recSz = ReceiverBaseOrigin.Parent:GetBoundingBox()
+                    -- A piece is "missed" if it's more than 8 studs from its target
+                    -- AND more than 120 studs from the receiver origin.
+                    local recOriginPos = ReceiverBaseOrigin.Position
 
                     local function getMissed()
                         local missed = {}
                         for _, data in ipairs(teleportedParts) do
                             local item = data.Instance
                             if not (item and item.Parent) then continue end
-                            local distToTarget = (item.Position - data.TargetCFrame.Position).Magnitude
-                            -- Already landed close enough — not missed
-                            if distToTarget <= 8 then continue end
-                            -- Already somewhere on the receiver plot — not missed
-                            -- (physics settled it, no need to touch it again)
-                            if isPointInside(item.Position, recCF, recSz) then continue end
+                            if (item.Position - data.TargetCFrame.Position).Magnitude <= 8 then continue end
+                            if (item.Position - recOriginPos).Magnitude <= 120 then continue end
                             table.insert(missed, data)
                         end
                         return missed
@@ -787,45 +783,59 @@ runBtn.MouseButton1Click:Connect(function()
 
                     local missedList = getMissed()
 
-                    while #missedList > 0 and butterRunning and attempt < MAX_TRIES do
-                        attempt += 1
-                        setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
+                    -- Only enter the retry loop if there are actually missed pieces.
+                    -- Show the progress bar based on missed count only, not total cargo.
+                    if #missedList > 0 then
+                        progTrucks.Visible = true
+                        local missedTotal = #missedList
+                        setProgTrucks(0, missedTotal)
 
-                        for _, data in ipairs(missedList) do
-                            if not butterRunning then break end
-                            local item = data.Instance
-                            if not (item and item.Parent) then continue end
+                        while #missedList > 0 and butterRunning and attempt < MAX_TRIES do
+                            attempt += 1
+                            setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
 
-                            -- Warp to wherever the item actually is right now
-                            local tries = 0
-                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
-                                Char.HumanoidRootPart.CFrame = item.CFrame
-                                task.wait(0.1)
-                                tries += 1
+                            for _, data in ipairs(missedList) do
+                                if not butterRunning then break end
+                                local item = data.Instance
+                                if not (item and item.Parent) then continue end
+
+                                -- Warp to wherever the item actually is right now
+                                local tries = 0
+                                while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
+                                    Char.HumanoidRootPart.CFrame = item.CFrame
+                                    task.wait(0.1)
+                                    tries += 1
+                                end
+
+                                -- Hammer ClientIsDragging to gain network ownership
+                                for i = 1, 50 do
+                                    task.wait(0.05)
+                                    RS.Interaction.ClientIsDragging:FireServer(item.Parent)
+                                end
+                                item.CFrame = data.TargetCFrame
+                                task.wait(0.5)
+                                -- One more nudge in case physics bounced it
+                                item.CFrame = data.TargetCFrame
+                                task.wait(0.2)
                             end
 
-                            RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-                            task.wait(0.6)
-                            item.CFrame = data.TargetCFrame
-                            task.wait(0.2)
-                            cargoDone += 1
-                            setProgTrucks(cargoDone, cargoTotal)
+                            task.wait(1)
+                            missedList = getMissed()
+                            cargoDone  = missedTotal - #missedList
+                            setProgTrucks(cargoDone, missedTotal)
+                        end
+
+                        if #missedList == 0 then
+                            setProgTrucks(missedTotal, missedTotal)
+                            setStatus("✓ All cargo teleported!", true)
+                        else
+                            setStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
                         end
 
                         task.wait(1)
-                        missedList = getMissed()
-                        cargoDone  = cargoTotal - #missedList
-                        setProgTrucks(cargoDone, cargoTotal)
-                    end
-
-                    if #missedList == 0 then
-                        setStatus("✓ All cargo teleported!", true)
                     else
-                        setStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
+                        setStatus("✓ All cargo teleported!", true)
                     end
-
-                    setProgTrucks(cargoTotal, cargoTotal)
-                    task.wait(1)
                 end
             end
         end
