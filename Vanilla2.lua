@@ -702,15 +702,51 @@ runBtn.MouseButton1Click:Connect(function()
                         if p:IsA("BasePart") then ignoredParts[p] = true end
                     end
 
-                    -- Snapshot workspace descendants AND their positions NOW,
-                    -- synchronously, before any yields so physics can't shift
-                    -- parts out of the bounding box before we check them.
+                    -- ── Eject and close door FIRST, before any cargo work ──────
+                    -- Capture DoorHinge and SitPart references before anything moves
+                    local SitPart   = Char.Humanoid.SeatPart
+                    local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
+                        and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
+                        and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+
+                    -- Eject: jump state first, then destroy the seat weld
+                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    task.wait(0.05)
+                    SitPart:Destroy()
+
+                    -- Wait until the humanoid is confirmed unseated
+                    local ejectWait = 0
+                    while Char.Humanoid.SeatPart and ejectWait < 2 do
+                        task.wait(0.05)
+                        ejectWait += 0.05
+                    end
+
+                    -- Close the door
+                    if DoorHinge then
+                        for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
+                    end
+
+                    task.wait(0.1)
+
+                    -- ── Now teleport the truck body and scan for cargo ──────────
+                    -- TeleportTruck() relies on SeatPart which is now nil after eject,
+                    -- so teleport tModel directly using the already-captured mCF.
+                    local truckMain = tModel:FindFirstChild("Main")
+                    if truckMain then
+                        local nPos = truckMain.CFrame.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                        tModel:SetPrimaryPartCFrame(CFrame.new(nPos) * truckMain.CFrame.Rotation)
+                    end
+                    DidTruckTeleport = false
+
+                    task.wait(0.1)
+
+                    -- Scan cargo: use original mCF/mSz (giver side) to detect what
+                    -- was inside the truck before it moved.
                     local cargoToMove = {}
                     for _, part in ipairs(workspace:GetDescendants()) do
                         if part:IsA("BasePart") and not ignoredParts[part] then
                             if part.Name == "Main" or part.Name == "WoodSection" then
                                 if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then continue end
-                                -- Capture position synchronously right now
                                 local capturedCF = part.CFrame
                                 if isPointInside(capturedCF.Position, mCF, mSz) then
                                     local nP   = capturedCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
@@ -721,11 +757,9 @@ runBtn.MouseButton1Click:Connect(function()
                         end
                     end
 
-                    -- Now spawn the actual teleports — position already confirmed above
                     for _, cargo in ipairs(cargoToMove) do
                         pendingSpawns += 1
                         task.spawn(function()
-                            TeleportTruck()
                             cargo.part.CFrame = cargo.tOff
                             task.wait(0.3)
                             table.insert(teleportedParts, {
@@ -734,17 +768,6 @@ runBtn.MouseButton1Click:Connect(function()
                             })
                             pendingSpawns -= 1
                         end)
-                    end
-
-                    local SitPart   = Char.Humanoid.SeatPart
-                    local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
-                        and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-                        and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
-                    task.wait()
-                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    task.wait(0.1); SitPart:Destroy(); TeleportTruck(); DidTruckTeleport = false; task.wait(0.1)
-                    if DoorHinge then
-                        for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
                     end
                     truckDone += 1; setProgTrucks(truckDone, truckCount)
                 end
