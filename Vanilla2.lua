@@ -486,7 +486,7 @@ makeLabel(dupePage, "What to Transfer")
 local _, getStructures = makeToggle(dupePage, "Structures",     false)
 local _, getFurniture  = makeToggle(dupePage, "Furniture",      false)
 local _, getTrucks     = makeToggle(dupePage, "Trucks + Cargo", false)
-local _, getGifs       = makeToggle(dupePage, "Gift Items",     false)
+local _, getGifs       = makeToggle(dupePage, "Gift/Items",     false)
 local _, getWood       = makeToggle(dupePage, "Wood",           false)
 
 makeSep(dupePage)
@@ -495,7 +495,7 @@ makeLabel(dupePage, "Progress")
 local progStructures, setProgStructures, resetProgStructures = makeProgressBar(dupePage, "Structures")
 local progFurniture,  setProgFurniture,  resetProgFurniture  = makeProgressBar(dupePage, "Furniture")
 local progTrucks,     setProgTrucks,     resetProgTrucks     = makeProgressBar(dupePage, "Trucks + Cargo")
-local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gift Items")
+local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gift/Items")
 local progWood,       setProgWood,       resetProgWood       = makeProgressBar(dupePage, "Wood")
 
 makeSep(dupePage)
@@ -764,6 +764,8 @@ runBtn.MouseButton1Click:Connect(function()
                     setProgTrucks(0, #missedList)
                     local missedTotal = #missedList  -- fixed denominator for Part 2
 
+                    local itemsDone = 0
+
                     while #missedList > 0 and VH.butter.running and attempt < MAX_TRIES do
                         attempt += 1
                         setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
@@ -774,7 +776,6 @@ runBtn.MouseButton1Click:Connect(function()
 
                             if not (item and item.Parent) then continue end
 
-                            -- Warp directly to the item (it could be anywhere on the giver's plot)
                             local tries = 0
                             while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
                                 Char.HumanoidRootPart.CFrame = item.CFrame
@@ -786,14 +787,17 @@ runBtn.MouseButton1Click:Connect(function()
                             task.wait(0.6)
                             item.CFrame = data.TargetCFrame
                             task.wait(0.2)
+
+                            -- Update progress immediately after each individual item
+                            itemsDone += 1
+                            setProgTrucks(itemsDone, missedTotal)
                         end
 
                         task.wait(1)
                         missedList = getMissed()
-
-                        -- FIX: Progress counts how many of the ORIGINAL missed items are now done
-                        local nowDone = missedTotal - #missedList
-                        setProgTrucks(nowDone, missedTotal)
+                        -- Sync to confirmed count after each full pass
+                        itemsDone = missedTotal - #missedList
+                        setProgTrucks(itemsDone, missedTotal)
                     end
 
                     if #missedList == 0 then
@@ -838,7 +842,7 @@ runBtn.MouseButton1Click:Connect(function()
             end)
             if total > 0 then
                 progGifs.Visible = true; setProgGifs(0, total)
-                setStatus("Sending gift items...", true)
+                setStatus("Sending gift/items...", true)
                 local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
@@ -1119,6 +1123,7 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
             local missedTotal    = #missedList
             local MAX_TRIES      = 25
             local attempt        = 0
+            local itemsDone      = 0
 
             while #missedList > 0 and singleTruckRunning and attempt < MAX_TRIES do
                 attempt += 1
@@ -1141,11 +1146,17 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
                     task.wait(0.6)
                     item.CFrame = data.TargetCFrame
                     task.wait(0.2)
+
+                    -- Update progress immediately after each individual item
+                    itemsDone += 1
+                    setTruckProg(itemsDone, missedTotal)
                 end
 
                 task.wait(1)
                 missedList = getMissed()
-                setTruckProg(missedTotal - #missedList, missedTotal)
+                -- Sync to confirmed count after each full pass
+                itemsDone = missedTotal - #missedList
+                setTruckProg(itemsDone, missedTotal)
             end
 
             if #missedList == 0 then
