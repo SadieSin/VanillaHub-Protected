@@ -632,6 +632,9 @@ runBtn.MouseButton1Click:Connect(function()
             local teleportedParts  = {}
             local ignoredParts     = {}
             local DidTruckTeleport = false
+            -- Tracks how many cargo task.spawns are still running so phase 2
+            -- never starts before every spawn has finished inserting.
+            local pendingSpawns    = 0
 
             local function TeleportTruck()
                 if DidTruckTeleport then return end
@@ -642,9 +645,8 @@ runBtn.MouseButton1Click:Connect(function()
                 DidTruckTeleport = true
             end
 
-            -- ★ FIX 1: Snapshot all truck models BEFORE iterating so that
-            --   destroying/moving trucks during the loop can't corrupt the iterator
-            --   (this is what caused the early stop at truck ~31).
+            -- Snapshot all truck models BEFORE iterating so that destroying/moving
+            -- trucks during the loop can't corrupt the iterator.
             local truckModels = {}
             for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                 if v.Name == "Owner" and tostring(v.Value) == giverName
@@ -663,7 +665,7 @@ runBtn.MouseButton1Click:Connect(function()
                 for _, truckModel in ipairs(truckModels) do
                     if not butterRunning then break end
 
-                    -- Skip trucks that were removed while we were working on others
+                    -- Skip trucks removed while we were working on earlier ones
                     if not truckModel.Parent then
                         truckDone += 1; setProgTrucks(truckDone, truckCount)
                         continue
@@ -677,7 +679,7 @@ runBtn.MouseButton1Click:Connect(function()
 
                     driveSeat:Sit(Char.Humanoid)
 
-                    -- ★ FIX 2: Add a sit timeout (5 s) so a failed sit can't hang forever
+                    -- Sit timeout: retry for up to 5 s before giving up on this truck
                     local sitTimer = 0
                     while not Char.Humanoid.SeatPart and sitTimer < 5 do
                         driveSeat:Sit(Char.Humanoid)
@@ -686,7 +688,6 @@ runBtn.MouseButton1Click:Connect(function()
                     end
 
                     if not Char.Humanoid.SeatPart then
-                        -- Couldn't sit — skip this truck and keep going
                         truckDone += 1; setProgTrucks(truckDone, truckCount)
                         continue
                     end
@@ -701,10 +702,16 @@ runBtn.MouseButton1Click:Connect(function()
                         if p:IsA("BasePart") then ignoredParts[p] = true end
                     end
 
-                    for _, part in ipairs(workspace:GetDescendants()) do
+                    -- Snapshot workspace descendants NOW (before eject) so the
+                    -- bounding-box check uses the correct pre-teleport positions.
+                    local wsSnap = workspace:GetDescendants()
+
+                    for _, part in ipairs(wsSnap) do
                         if part:IsA("BasePart") and not ignoredParts[part] then
                             if part.Name == "Main" or part.Name == "WoodSection" then
                                 if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then continue end
+                                -- Track each spawn so we know when they're all done
+                                pendingSpawns += 1
                                 task.spawn(function()
                                     if isPointInside(part.Position, mCF, mSz) then
                                         TeleportTruck()
@@ -715,10 +722,10 @@ runBtn.MouseButton1Click:Connect(function()
                                         task.wait(0.3)
                                         table.insert(teleportedParts, {
                                             Instance     = part,
-                                            OldPos       = part.Position,
                                             TargetCFrame = tOff,
                                         })
                                     end
+                                    pendingSpawns -= 1
                                 end)
                             end
                         end
@@ -737,8 +744,14 @@ runBtn.MouseButton1Click:Connect(function()
                     truckDone += 1; setProgTrucks(truckDone, truckCount)
                 end
 
-                -- Phase 2: retry any cargo that didn't reach TargetCFrame, up to 25 times
-                task.wait(2)
+                -- Phase 2: wait until every cargo task.spawn has finished inserting,
+                -- then retry any pieces that didn't land at their TargetCFrame.
+                setStatus("Waiting for cargo scans to finish...", true)
+                local waitedFor = 0
+                while pendingSpawns > 0 and butterRunning and waitedFor < 15 do
+                    task.wait(0.2)
+                    waitedFor += 0.2
+                end
 
                 local cargoTotal = #teleportedParts
                 local cargoDone  = 0
@@ -750,23 +763,30 @@ runBtn.MouseButton1Click:Connect(function()
                     local MAX_TRIES = 25
                     local attempt   = 0
 
+                    -- A piece is "missed" if it's more than 8 studs from where we
+                    -- tried to put it AND it isn't already sitting on the receiver
+                    -- plot (i.e. don't re-teleport things that landed correctly but
+                    -- physics moved them slightly within the plot).
+                    local recCF, recSz = ReceiverBaseOrigin.Parent:GetBoundingBox()
+
                     local function getMissed()
                         local missed = {}
                         for _, data in ipairs(teleportedParts) do
-                            if data.Instance and data.Instance.Parent then
-                                local dist = (data.Instance.Position - data.TargetCFrame.Position).Magnitude
-                                if dist > 8 then
-                                    table.insert(missed, data)
-                                end
-                            end
+                            local item = data.Instance
+                            if not (item and item.Parent) then continue end
+                            local distToTarget = (item.Position - data.TargetCFrame.Position).Magnitude
+                            -- Already landed close enough — not missed
+                            if distToTarget <= 8 then continue end
+                            -- Already somewhere on the receiver plot — not missed
+                            -- (physics settled it, no need to touch it again)
+                            if isPointInside(item.Position, recCF, recSz) then continue end
+                            table.insert(missed, data)
                         end
                         return missed
                     end
 
                     local missedList = getMissed()
 
-                    -- ★ FIX 3: Check butterRunning (local) consistently — VH.butter.running
-                    --   can be cleared externally and diverge from the local flag mid-loop.
                     while #missedList > 0 and butterRunning and attempt < MAX_TRIES do
                         attempt += 1
                         setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
@@ -776,6 +796,7 @@ runBtn.MouseButton1Click:Connect(function()
                             local item = data.Instance
                             if not (item and item.Parent) then continue end
 
+                            -- Warp to wherever the item actually is right now
                             local tries = 0
                             while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
                                 Char.HumanoidRootPart.CFrame = item.CFrame
