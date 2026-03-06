@@ -1294,13 +1294,12 @@ wMakeSep(worldPage)
 wMakeLabel(worldPage, "Water")
 
 -- Walk On Water
--- LT2 uses Terrain water. We disable the Swimming humanoid state so the
--- character walks on the water surface instead of sinking into it.
+-- Uses a Heartbeat loop to detect when the player enters water and
+-- continuously pushes them to the surface, preventing submersion.
 local walkWaterConn
 
 local function removeWalkWater()
     if walkWaterConn then walkWaterConn:Disconnect(); walkWaterConn = nil end
-    -- Re-enable swimming state
     local char = player.Character
     local hum  = char and char:FindFirstChild("Humanoid")
     if hum then
@@ -1311,18 +1310,35 @@ end
 
 wMakeToggle(worldPage, "Walk On Water", false, function(on)
     if on then
-        local char = player.Character
-        local hum  = char and char:FindFirstChild("Humanoid")
-        if hum then
+        local function applyToChar(char)
+            local hum = char:WaitForChild("Humanoid", 5)
+            local hrp = char:WaitForChild("HumanoidRootPart", 5)
+            if not (hum and hrp) then return end
             hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
             hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
         end
-        -- Re-apply on respawn
-        walkWaterConn = player.CharacterAdded:Connect(function(newChar)
-            local newHum = newChar:WaitForChild("Humanoid", 5)
-            if newHum and walkWaterConn then
-                newHum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-                newHum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
+
+        local char = player.Character
+        if char then task.spawn(applyToChar, char) end
+
+        walkWaterConn = RunService.Heartbeat:Connect(function()
+            if not walkWaterConn then return end
+            local c   = player.Character
+            local hum = c and c:FindFirstChild("Humanoid")
+            local hrp = c and c:FindFirstChild("HumanoidRootPart")
+            if not (hum and hrp) then return end
+
+            -- Disable swim states every frame so the server can't re-enable them
+            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+            hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
+
+            -- If the humanoid is in a swimming state, yank them up to surface
+            local state = hum:GetState()
+            if state == Enum.HumanoidStateType.Swimming
+            or state == Enum.HumanoidStateType.SwimmingRotating then
+                local pos = hrp.Position
+                hrp.CFrame = CFrame.new(pos.X, pos.Y + 2, pos.Z)
+                hum:ChangeState(Enum.HumanoidStateType.Running)
             end
         end)
     else
@@ -1332,59 +1348,32 @@ end)
 table.insert(VH.cleanupTasks, removeWalkWater)
 
 -- Remove Water
--- LT2 water is Terrain. We use Terrain:ReplaceMaterial to swap Water→Air
--- client-side, and swap back on toggle off.
-local removeWaterOn = false
-
-local function applyRemoveWater()
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if not terrain then return end
-    pcall(function()
-        terrain:ReplaceMaterial(workspace.FallenPartsDestroyHeight ~= nil
-            and Region3.new(
-                Vector3.new(-5000, -500, -5000),
-                Vector3.new( 5000,  500,  5000)
-            )
-            or Region3.new(
-                Vector3.new(-5000, -500, -5000),
-                Vector3.new( 5000,  500,  5000)
-            ),
-            4,  -- resolution
-            Enum.Material.Water,
-            Enum.Material.Air
-        )
-    end)
-end
-
-local function applyRestoreWater()
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if not terrain then return end
-    pcall(function()
-        terrain:ReplaceMaterial(
-            Region3.new(
-                Vector3.new(-5000, -500, -5000),
-                Vector3.new( 5000,  500,  5000)
-            ),
-            4,
-            Enum.Material.Air,
-            Enum.Material.Water
-        )
-    end)
-end
+-- Terrain:ReplaceMaterial is server-side only so we instead make the water
+-- invisible by zeroing out the Terrain water visual properties client-side.
+-- Toggling off restores the original values.
+local origWaterTransparency  = workspace.Terrain.WaterTransparency
+local origWaterWaveSize      = workspace.Terrain.WaterWaveSize
+local origWaterWaveSpeed     = workspace.Terrain.WaterWaveSpeed
+local origWaterReflectance   = workspace.Terrain.WaterReflectance
 
 wMakeToggle(worldPage, "Remove Water", false, function(on)
-    removeWaterOn = on
     if on then
-        applyRemoveWater()
+        workspace.Terrain.WaterTransparency = 1
+        workspace.Terrain.WaterWaveSize     = 0
+        workspace.Terrain.WaterWaveSpeed    = 0
+        workspace.Terrain.WaterReflectance  = 0
     else
-        applyRestoreWater()
+        workspace.Terrain.WaterTransparency = origWaterTransparency
+        workspace.Terrain.WaterWaveSize     = origWaterWaveSize
+        workspace.Terrain.WaterWaveSpeed    = origWaterWaveSpeed
+        workspace.Terrain.WaterReflectance  = origWaterReflectance
     end
 end)
 table.insert(VH.cleanupTasks, function()
-    if removeWaterOn then
-        applyRestoreWater()
-        removeWaterOn = false
-    end
+    workspace.Terrain.WaterTransparency = origWaterTransparency
+    workspace.Terrain.WaterWaveSize     = origWaterWaveSize
+    workspace.Terrain.WaterWaveSpeed    = origWaterWaveSpeed
+    workspace.Terrain.WaterReflectance  = origWaterReflectance
 end)
 
 end -- worldPage guard
