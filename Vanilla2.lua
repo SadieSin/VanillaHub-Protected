@@ -118,37 +118,6 @@ local function makeBtn(parent, text, color, callback)
     return btn
 end
 
-local function makeInput(parent, labelText, placeholder)
-    local frame = Instance.new("Frame", parent)
-    frame.Size             = UDim2.new(1, -12, 0, 34)
-    frame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-    frame.BorderSizePixel  = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size               = UDim2.new(0, 110, 1, 0)
-    lbl.Position           = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Font               = Enum.Font.GothamSemibold
-    lbl.TextSize           = 12
-    lbl.TextColor3         = Color3.fromRGB(160, 150, 170)
-    lbl.TextXAlignment     = Enum.TextXAlignment.Left
-    lbl.Text               = labelText
-    local box = Instance.new("TextBox", frame)
-    box.Size              = UDim2.new(1, -125, 0, 22)
-    box.Position          = UDim2.new(0, 118, 0.5, -11)
-    box.BackgroundColor3  = Color3.fromRGB(35, 35, 45)
-    box.BorderSizePixel   = 0
-    box.Font              = Enum.Font.Gotham
-    box.TextSize          = 12
-    box.TextColor3        = THEME_TEXT
-    box.PlaceholderText   = placeholder or "..."
-    box.PlaceholderColor3 = Color3.fromRGB(90, 85, 100)
-    box.Text              = ""
-    box.ClearTextOnFocus  = false
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 5)
-    Instance.new("UIPadding", box).PaddingLeft = UDim.new(0, 6)
-    return frame, box
-end
 
 local function makeProgressBar(parent, labelText)
     local wrap = Instance.new("Frame", parent)
@@ -209,6 +178,267 @@ local function makeProgressBar(parent, labelText)
     return wrap, setProgress, reset
 end
 
+-- ── PLAYER DROPDOWN ───────────────────────────────────────────────────────────
+local function makeDupeDropdown(labelText, parentPage)
+    local selected  = ""
+    local isOpen    = false
+    local ITEM_H    = 34
+    local MAX_SHOW  = 5
+    local HEADER_H  = 40
+
+    local outer = Instance.new("Frame", parentPage)
+    outer.Size             = UDim2.new(1, -12, 0, HEADER_H)
+    outer.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+    outer.BorderSizePixel  = 0
+    outer.ClipsDescendants = true
+    Instance.new("UICorner", outer).CornerRadius = UDim.new(0, 8)
+    local outerStroke = Instance.new("UIStroke", outer)
+    outerStroke.Color        = Color3.fromRGB(60, 60, 90)
+    outerStroke.Thickness    = 1
+    outerStroke.Transparency = 0.5
+
+    local header = Instance.new("Frame", outer)
+    header.Size                   = UDim2.new(1, 0, 0, HEADER_H)
+    header.BackgroundTransparency = 1
+    header.BorderSizePixel        = 0
+
+    local lbl = Instance.new("TextLabel", header)
+    lbl.Size               = UDim2.new(0, 80, 1, 0)
+    lbl.Position           = UDim2.new(0, 12, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text               = labelText
+    lbl.Font               = Enum.Font.GothamBold
+    lbl.TextSize           = 12
+    lbl.TextColor3         = THEME_TEXT
+    lbl.TextXAlignment     = Enum.TextXAlignment.Left
+
+    local selFrame = Instance.new("Frame", header)
+    selFrame.Size             = UDim2.new(1, -96, 0, 28)
+    selFrame.Position         = UDim2.new(0, 90, 0.5, -14)
+    selFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 42)
+    selFrame.BorderSizePixel  = 0
+    Instance.new("UICorner", selFrame).CornerRadius = UDim.new(0, 6)
+    local selStroke = Instance.new("UIStroke", selFrame)
+    selStroke.Color        = Color3.fromRGB(70, 70, 110)
+    selStroke.Thickness    = 1
+    selStroke.Transparency = 0.4
+
+    local avatar = Instance.new("ImageLabel", selFrame)
+    avatar.Size             = UDim2.new(0, 20, 0, 20)
+    avatar.Position         = UDim2.new(0, 6, 0.5, -10)
+    avatar.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
+    avatar.BorderSizePixel  = 0
+    avatar.Image            = ""
+    avatar.ScaleType        = Enum.ScaleType.Crop
+    Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
+
+    local selLbl = Instance.new("TextLabel", selFrame)
+    selLbl.Size               = UDim2.new(1, -60, 1, 0)
+    selLbl.Position           = UDim2.new(0, 32, 0, 0)
+    selLbl.BackgroundTransparency = 1
+    selLbl.Text               = "Select a player..."
+    selLbl.Font               = Enum.Font.GothamSemibold
+    selLbl.TextSize           = 12
+    selLbl.TextColor3         = Color3.fromRGB(110, 110, 140)
+    selLbl.TextXAlignment     = Enum.TextXAlignment.Left
+    selLbl.TextTruncate       = Enum.TextTruncate.AtEnd
+
+    local arrowLbl = Instance.new("TextLabel", selFrame)
+    arrowLbl.Size               = UDim2.new(0, 22, 1, 0)
+    arrowLbl.Position           = UDim2.new(1, -24, 0, 0)
+    arrowLbl.BackgroundTransparency = 1
+    arrowLbl.Text               = "▾"
+    arrowLbl.Font               = Enum.Font.GothamBold
+    arrowLbl.TextSize           = 14
+    arrowLbl.TextColor3         = Color3.fromRGB(120, 120, 160)
+    arrowLbl.TextXAlignment     = Enum.TextXAlignment.Center
+
+    local headerBtn = Instance.new("TextButton", selFrame)
+    headerBtn.Size               = UDim2.new(1, 0, 1, 0)
+    headerBtn.BackgroundTransparency = 1
+    headerBtn.Text               = ""
+    headerBtn.ZIndex             = 5
+
+    local divider = Instance.new("Frame", outer)
+    divider.Size             = UDim2.new(1, -16, 0, 1)
+    divider.Position         = UDim2.new(0, 8, 0, HEADER_H)
+    divider.BackgroundColor3 = Color3.fromRGB(50, 50, 75)
+    divider.BorderSizePixel  = 0
+    divider.Visible          = false
+
+    local listScroll = Instance.new("ScrollingFrame", outer)
+    listScroll.Position               = UDim2.new(0, 0, 0, HEADER_H + 2)
+    listScroll.Size                   = UDim2.new(1, 0, 0, 0)
+    listScroll.BackgroundTransparency = 1
+    listScroll.BorderSizePixel        = 0
+    listScroll.ScrollBarThickness     = 3
+    listScroll.ScrollBarImageColor3   = Color3.fromRGB(90, 90, 130)
+    listScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
+    listScroll.ClipsDescendants       = true
+
+    local listLayout = Instance.new("UIListLayout", listScroll)
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding   = UDim.new(0, 3)
+    listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        listScroll.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 6)
+    end)
+    local listPad = Instance.new("UIPadding", listScroll)
+    listPad.PaddingTop    = UDim.new(0, 4)
+    listPad.PaddingBottom = UDim.new(0, 4)
+    listPad.PaddingLeft   = UDim.new(0, 6)
+    listPad.PaddingRight  = UDim.new(0, 6)
+
+    local function setSelected(name, userId)
+        selected            = name
+        selLbl.Text         = name
+        selLbl.TextColor3   = THEME_TEXT
+        arrowLbl.TextColor3 = Color3.fromRGB(160, 160, 210)
+        outerStroke.Color   = Color3.fromRGB(90, 90, 160)
+        if userId then
+            pcall(function()
+                avatar.Image = Players:GetUserThumbnailAsync(
+                    userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+            end)
+        end
+    end
+
+    local function clearSelected()
+        selected            = ""
+        selLbl.Text         = "Select a player..."
+        selLbl.TextColor3   = Color3.fromRGB(110, 110, 140)
+        avatar.Image        = ""
+        arrowLbl.TextColor3 = Color3.fromRGB(120, 120, 160)
+        outerStroke.Color   = Color3.fromRGB(60, 60, 90)
+    end
+
+    local function closeList()
+        isOpen = false
+        TweenService:Create(arrowLbl,   TweenInfo.new(0.2,  Enum.EasingStyle.Quint), {Rotation = 0}):Play()
+        TweenService:Create(outer,      TweenInfo.new(0.22, Enum.EasingStyle.Quint), {Size = UDim2.new(1,-12,0,HEADER_H)}):Play()
+        TweenService:Create(listScroll, TweenInfo.new(0.22, Enum.EasingStyle.Quint), {Size = UDim2.new(1,0,0,0)}):Play()
+        divider.Visible = false
+    end
+
+    local function buildList()
+        for _, c in ipairs(listScroll:GetChildren()) do
+            if c:IsA("Frame") or c:IsA("TextButton") then c:Destroy() end
+        end
+        local playerList = Players:GetPlayers()
+        table.sort(playerList, function(a, b) return a.Name < b.Name end)
+        for i, plr in ipairs(playerList) do
+            local isSelected = (plr.Name == selected)
+            local row = Instance.new("Frame", listScroll)
+            row.Size             = UDim2.new(1, 0, 0, ITEM_H)
+            row.BackgroundColor3 = isSelected and Color3.fromRGB(45,45,75) or Color3.fromRGB(28,28,40)
+            row.BorderSizePixel  = 0
+            row.LayoutOrder      = i
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
+
+            local miniAvatar = Instance.new("ImageLabel", row)
+            miniAvatar.Size             = UDim2.new(0, 22, 0, 22)
+            miniAvatar.Position         = UDim2.new(0, 8, 0.5, -11)
+            miniAvatar.BackgroundColor3 = Color3.fromRGB(40, 40, 58)
+            miniAvatar.BorderSizePixel  = 0
+            miniAvatar.ScaleType        = Enum.ScaleType.Crop
+            Instance.new("UICorner", miniAvatar).CornerRadius = UDim.new(1, 0)
+            task.spawn(function()
+                pcall(function()
+                    miniAvatar.Image = Players:GetUserThumbnailAsync(
+                        plr.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size48x48)
+                end)
+            end)
+
+            local nameLbl = Instance.new("TextLabel", row)
+            nameLbl.Size               = UDim2.new(1, -70, 1, 0)
+            nameLbl.Position           = UDim2.new(0, 36, 0, 0)
+            nameLbl.BackgroundTransparency = 1
+            nameLbl.Text               = plr.Name
+            nameLbl.Font               = Enum.Font.GothamSemibold
+            nameLbl.TextSize           = 13
+            nameLbl.TextColor3         = isSelected and THEME_TEXT or Color3.fromRGB(200, 200, 215)
+            nameLbl.TextXAlignment     = Enum.TextXAlignment.Left
+            nameLbl.TextTruncate       = Enum.TextTruncate.AtEnd
+
+            if isSelected then
+                local check = Instance.new("TextLabel", row)
+                check.Size               = UDim2.new(0, 24, 1, 0)
+                check.Position           = UDim2.new(1, -28, 0, 0)
+                check.BackgroundTransparency = 1
+                check.Text               = "✓"
+                check.Font               = Enum.Font.GothamBold
+                check.TextSize           = 14
+                check.TextColor3         = Color3.fromRGB(120, 180, 255)
+                check.TextXAlignment     = Enum.TextXAlignment.Center
+            end
+
+            local rowBtn = Instance.new("TextButton", row)
+            rowBtn.Size               = UDim2.new(1, 0, 1, 0)
+            rowBtn.BackgroundTransparency = 1
+            rowBtn.Text               = ""
+            rowBtn.ZIndex             = 5
+            rowBtn.MouseEnter:Connect(function()
+                if plr.Name ~= selected then
+                    TweenService:Create(row, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(38,38,58)}):Play()
+                end
+            end)
+            rowBtn.MouseLeave:Connect(function()
+                if plr.Name ~= selected then
+                    TweenService:Create(row, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(28,28,40)}):Play()
+                end
+            end)
+            rowBtn.MouseButton1Click:Connect(function()
+                if plr.Name == selected then clearSelected() else setSelected(plr.Name, plr.UserId) end
+                buildList()
+                task.delay(0.05, closeList)
+            end)
+        end
+    end
+
+    local function openList()
+        isOpen = true
+        buildList()
+        local count  = #Players:GetPlayers()
+        local listH  = math.min(count, MAX_SHOW) * (ITEM_H + 3) + 8
+        local totalH = HEADER_H + 2 + listH
+        divider.Visible = true
+        TweenService:Create(arrowLbl,   TweenInfo.new(0.2,  Enum.EasingStyle.Quint), {Rotation = 180}):Play()
+        TweenService:Create(outer,      TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = UDim2.new(1,-12,0,totalH)}):Play()
+        TweenService:Create(listScroll, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = UDim2.new(1,0,0,listH)}):Play()
+    end
+
+    headerBtn.MouseButton1Click:Connect(function()
+        if isOpen then closeList() else openList() end
+    end)
+    headerBtn.MouseEnter:Connect(function()
+        TweenService:Create(selFrame, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(38,38,55)}):Play()
+    end)
+    headerBtn.MouseLeave:Connect(function()
+        TweenService:Create(selFrame, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(30,30,42)}):Play()
+    end)
+
+    Players.PlayerAdded:Connect(function()
+        if isOpen then
+            buildList()
+            local count = #Players:GetPlayers()
+            local listH = math.min(count, MAX_SHOW) * (ITEM_H + 3) + 8
+            outer.Size      = UDim2.new(1, -12, 0, HEADER_H + 2 + listH)
+            listScroll.Size = UDim2.new(1, 0, 0, listH)
+        end
+    end)
+    Players.PlayerRemoving:Connect(function(leaving)
+        if leaving.Name == selected then clearSelected() end
+        if isOpen then
+            buildList()
+            local count = #Players:GetPlayers()
+            local listH = math.min(math.max(count - 1, 0), MAX_SHOW) * (ITEM_H + 3) + 8
+            outer.Size      = UDim2.new(1, -12, 0, HEADER_H + 2 + listH)
+            listScroll.Size = UDim2.new(1, 0, 0, listH)
+        end
+    end)
+
+    return outer, function() return selected end
+end
+
 -- ════════════════════════════════════════════════════════════════════════════════
 -- DUPE TAB — Butter Leak
 -- ════════════════════════════════════════════════════════════════════════════════
@@ -245,20 +475,19 @@ local function setStatus(msg, active)
     }):Play()
 end
 
--- ── PLAYER INPUTS ─────────────────────────────────────────────────────────────
+-- ── PLAYER DROPDOWNS ──────────────────────────────────────────────────────────
 makeLabel(dupePage, "Players")
-local _, giverBox    = makeInput(dupePage, "Giver Name",    "username")
-local _, receiverBox = makeInput(dupePage, "Receiver Name", "username")
+local _, getGiverName    = makeDupeDropdown("Giver",    dupePage)
+local _, getReceiverName = makeDupeDropdown("Receiver", dupePage)
 
 makeSep(dupePage)
 makeLabel(dupePage, "What to Transfer")
 
-local _, getStructures = makeToggle(dupePage, "Structures",      false)
-local _, getFurniture  = makeToggle(dupePage, "Furniture",       false)
-local _, getTrucks     = makeToggle(dupePage, "Trucks + Cargo",  false)
-local _, getItems      = makeToggle(dupePage, "Purchased Items", false)
-local _, getGifs       = makeToggle(dupePage, "Gif Items",       false)
-local _, getWood       = makeToggle(dupePage, "Wood",            false)
+local _, getStructures = makeToggle(dupePage, "Structures",     false)
+local _, getFurniture  = makeToggle(dupePage, "Furniture",      false)
+local _, getTrucks     = makeToggle(dupePage, "Trucks + Cargo", false)
+local _, getGifs       = makeToggle(dupePage, "Gift Items",     false)
+local _, getWood       = makeToggle(dupePage, "Wood",           false)
 
 makeSep(dupePage)
 makeLabel(dupePage, "Progress")
@@ -266,8 +495,7 @@ makeLabel(dupePage, "Progress")
 local progStructures, setProgStructures, resetProgStructures = makeProgressBar(dupePage, "Structures")
 local progFurniture,  setProgFurniture,  resetProgFurniture  = makeProgressBar(dupePage, "Furniture")
 local progTrucks,     setProgTrucks,     resetProgTrucks     = makeProgressBar(dupePage, "Trucks + Cargo")
-local progItems,      setProgItems,      resetProgItems      = makeProgressBar(dupePage, "Purchased Items")
-local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gif Items")
+local progGifs,       setProgGifs,       resetProgGifs       = makeProgressBar(dupePage, "Gift Items")
 local progWood,       setProgWood,       resetProgWood       = makeProgressBar(dupePage, "Wood")
 
 makeSep(dupePage)
@@ -281,7 +509,7 @@ local butterThread  = nil
 
 local function resetAllProgress()
     resetProgStructures(); resetProgFurniture(); resetProgTrucks()
-    resetProgItems();      resetProgGifs();      resetProgWood()
+    resetProgGifs();       resetProgWood()
 end
 
 stopBtn.MouseButton1Click:Connect(function()
@@ -295,10 +523,10 @@ end)
 runBtn.MouseButton1Click:Connect(function()
     if butterRunning then setStatus("Already running!", true) return end
 
-    local giverName    = giverBox.Text
-    local receiverName = receiverBox.Text
+    local giverName    = getGiverName()
+    local receiverName = getReceiverName()
     if giverName == "" or receiverName == "" then
-        setStatus("⚠ Enter both player names!", false) return
+        setStatus("⚠ Select both players!", false) return
     end
 
     butterRunning = true; VH.butter.running = true
@@ -602,37 +830,7 @@ runBtn.MouseButton1Click:Connect(function()
             task.wait(0.2)
         end
 
-        -- ── PURCHASED ITEMS ───────────────────────────────────────────────────
-        if getItems() and butterRunning then
-            local total = countItems(function(p)
-                return p:FindFirstChild("PurchasedBoxItemName")
-                    and (p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part"))
-            end)
-            if total > 0 then
-                progItems.Visible = true; setProgItems(0, total)
-                setStatus("Sending purchased items...", true)
-                local done = 0
-                pcall(function()
-                    for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                        if not butterRunning then break end
-                        if v.Name == "Owner" and tostring(v.Value) == giverName then
-                            local p = v.Parent
-                            if p:FindFirstChild("PurchasedBoxItemName") then
-                                local part = p:FindFirstChild("Main") or p:FindFirstChildOfClass("Part")
-                                if not part then continue end
-                                local PCF  = (p:FindFirstChild("Main") and p.Main.CFrame) or p:FindFirstChildOfClass("Part").CFrame
-                                local nPos = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                                sendItem(part, CFrame.new(nPos) * PCF.Rotation)
-                                done += 1; setProgItems(done, total)
-                            end
-                        end
-                    end
-                end)
-                setProgItems(total, total)
-            end
-        end
-
-        -- ── GIF ITEMS ─────────────────────────────────────────────────────────
+        -- ── GIFT ITEMS ────────────────────────────────────────────────────────
         if getGifs() and butterRunning then
             local total = countItems(function(p)
                 return p:FindFirstChildOfClass("Script") and p:FindFirstChild("DraggableItem")
@@ -640,7 +838,7 @@ runBtn.MouseButton1Click:Connect(function()
             end)
             if total > 0 then
                 progGifs.Visible = true; setProgGifs(0, total)
-                setStatus("Sending gif items...", true)
+                setStatus("Sending gift items...", true)
                 local done = 0
                 pcall(function()
                     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
@@ -708,6 +906,271 @@ table.insert(VH.cleanupTasks, function()
     butterRunning = false; VH.butter.running = false
     if butterThread then pcall(task.cancel, butterThread); butterThread = nil end
     VH.butter.thread = nil
+end)
+
+-- ════════════════════════════════════════════════════════════════════════════════
+-- SINGLE TRUCK TELEPORT (Dupe Tab — below Butter Leak)
+-- ════════════════════════════════════════════════════════════════════════════════
+
+makeSep(dupePage)
+makeLabel(dupePage, "Single Truck Teleport")
+
+local _, getTruckGiverName    = makeDupeDropdown("Giver",    dupePage)
+local _, getTruckReceiverName = makeDupeDropdown("Receiver", dupePage)
+
+-- Status bar
+local truckStatusBar = Instance.new("Frame", dupePage)
+truckStatusBar.Size             = UDim2.new(1, -12, 0, 28)
+truckStatusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+truckStatusBar.BorderSizePixel  = 0
+Instance.new("UICorner", truckStatusBar).CornerRadius = UDim.new(0, 6)
+Instance.new("UIStroke", truckStatusBar).Color = Color3.fromRGB(50, 50, 70)
+
+local truckStatusDot = Instance.new("Frame", truckStatusBar)
+truckStatusDot.Size             = UDim2.new(0, 8, 0, 8)
+truckStatusDot.Position         = UDim2.new(0, 10, 0.5, -4)
+truckStatusDot.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+truckStatusDot.BorderSizePixel  = 0
+Instance.new("UICorner", truckStatusDot).CornerRadius = UDim.new(1, 0)
+
+local truckStatusLbl = Instance.new("TextLabel", truckStatusBar)
+truckStatusLbl.Size                   = UDim2.new(1, -28, 1, 0)
+truckStatusLbl.Position               = UDim2.new(0, 26, 0, 0)
+truckStatusLbl.BackgroundTransparency = 1
+truckStatusLbl.Font                   = Enum.Font.Gotham
+truckStatusLbl.TextSize               = 12
+truckStatusLbl.TextColor3             = Color3.fromRGB(160, 155, 175)
+truckStatusLbl.TextXAlignment         = Enum.TextXAlignment.Left
+truckStatusLbl.Text                   = "Ready — sit in a truck first"
+
+local function setTruckStatus(msg, active)
+    truckStatusLbl.Text = msg
+    TweenService:Create(truckStatusDot, TweenInfo.new(0.2), {
+        BackgroundColor3 = active
+            and Color3.fromRGB(80, 200, 100)
+            or  Color3.fromRGB(100, 100, 120)
+    }):Play()
+end
+
+local truckProgBar, setTruckProg, resetTruckProg = makeProgressBar(dupePage, "Truck + Cargo")
+
+local singleTruckRunning = false
+local singleTruckThread  = nil
+
+local stopTruckBtn = makeBtn(dupePage, "■  Stop Truck", Color3.fromRGB(65, 25, 25), function()
+    singleTruckRunning = false
+    if singleTruckThread then
+        pcall(task.cancel, singleTruckThread)
+        singleTruckThread = nil
+    end
+    setTruckStatus("Stopped", false)
+    resetTruckProg()
+    stopTruckBtn.Visible = false
+end)
+stopTruckBtn.Visible = false
+
+makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
+    if singleTruckRunning then setTruckStatus("Already running!", true) return end
+
+    local LP   = Players.LocalPlayer
+    local Char = LP.Character
+    if not Char then setTruckStatus("No character found!", false) return end
+
+    local hum = Char:FindFirstChildOfClass("Humanoid")
+    if not (hum and hum.SeatPart) then
+        setTruckStatus("Not sitting in a truck!", false) return
+    end
+
+    local truckModel = hum.SeatPart.Parent
+    if not truckModel:FindFirstChild("DriveSeat") then
+        setTruckStatus("Seat is not a truck DriveSeat!", false) return
+    end
+
+    local gName = getTruckGiverName()
+    local rName = getTruckReceiverName()
+    if gName == "" or rName == "" then
+        setTruckStatus("Select both players!", false) return
+    end
+
+    local GiveBaseOrigin, ReceiverBaseOrigin
+    for _, v in pairs(workspace.Properties:GetDescendants()) do
+        if v.Name == "Owner" then
+            local val = tostring(v.Value)
+            if val == gName then GiveBaseOrigin     = v.Parent:FindFirstChild("OriginSquare") end
+            if val == rName then ReceiverBaseOrigin = v.Parent:FindFirstChild("OriginSquare") end
+        end
+    end
+
+    if not GiveBaseOrigin     then setTruckStatus("Giver base not found!",    false) return end
+    if not ReceiverBaseOrigin then setTruckStatus("Receiver base not found!", false) return end
+
+    singleTruckRunning   = true
+    stopTruckBtn.Visible = true
+    resetTruckProg()
+    setTruckStatus("Sending truck...", true)
+
+    singleTruckThread = task.spawn(function()
+        local RS = game:GetService("ReplicatedStorage")
+
+        local function isPointInside(point, boxCFrame, boxSize)
+            local r = boxCFrame:PointToObjectSpace(point)
+            return math.abs(r.X) <= boxSize.X / 2
+               and math.abs(r.Y) <= boxSize.Y / 2 + 2
+               and math.abs(r.Z) <= boxSize.Z / 2
+        end
+
+        local teleportedParts  = {}
+        local ignoredParts     = {}
+        local DidTruckTeleport = false
+
+        local function TeleportTruck()
+            if DidTruckTeleport then return end
+            if not Char.Humanoid.SeatPart then return end
+            local TCF  = Char.Humanoid.SeatPart.Parent:FindFirstChild("Main").CFrame
+            local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+            Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
+            DidTruckTeleport = true
+        end
+
+        truckProgBar.Visible = true
+        setTruckProg(0, 1)
+
+        truckModel.DriveSeat:Sit(Char.Humanoid)
+        repeat task.wait() truckModel.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
+
+        local mCF, mSz = truckModel:GetBoundingBox()
+
+        for _, p in ipairs(truckModel:GetDescendants()) do
+            if p:IsA("BasePart") then ignoredParts[p] = true end
+        end
+        for _, p in ipairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then ignoredParts[p] = true end
+        end
+
+        -- Scan all workspace parts for cargo inside the truck's bounding box
+        for _, part in ipairs(workspace:GetDescendants()) do
+            if not singleTruckRunning then break end
+            if part:IsA("BasePart") and not ignoredParts[part] then
+                if part.Name == "Main" or part.Name == "WoodSection" then
+                    if part:FindFirstChild("Weld")
+                        and part.Weld.Part1
+                        and part.Weld.Part1.Parent ~= part.Parent then
+                        continue
+                    end
+                    task.spawn(function()
+                        if isPointInside(part.Position, mCF, mSz) then
+                            TeleportTruck()
+                            local PCF  = part.CFrame
+                            local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                            local tOff = CFrame.new(nP) * PCF.Rotation
+                            part.CFrame = tOff
+                            task.wait(0.3)
+                            table.insert(teleportedParts, {
+                                Instance     = part,
+                                OldPos       = part.Position,
+                                TargetCFrame = tOff,
+                            })
+                        end
+                    end)
+                end
+            end
+        end
+
+        -- Eject, destroy seat, close door, re-teleport truck
+        local SitPart   = Char.Humanoid.SeatPart
+        local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
+            and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
+            and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+        task.wait()
+        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+        task.wait(0.1)
+        SitPart:Destroy()
+        TeleportTruck()
+        DidTruckTeleport = false
+        task.wait(0.1)
+        if DoorHinge then
+            for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
+        end
+        setTruckProg(1, 1)
+
+        task.wait(2) -- give task.spawns time to finish recording
+
+        -- ── Cargo retry loop (up to 25 attempts) ──────────────────────────────
+        local function getMissed()
+            local missed = {}
+            for _, data in ipairs(teleportedParts) do
+                if data.Instance and data.Instance.Parent then
+                    if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
+                        local distFromGiver = (data.Instance.Position - GiveBaseOrigin.Position).Magnitude
+                        if distFromGiver < 500 then
+                            table.insert(missed, data)
+                        end
+                    end
+                end
+            end
+            return missed
+        end
+
+        local missedList = getMissed()
+
+        if #missedList > 0 then
+            truckProgBar.Visible = true
+            setTruckProg(0, #missedList)
+            local missedTotal    = #missedList
+            local MAX_TRIES      = 25
+            local attempt        = 0
+
+            while #missedList > 0 and singleTruckRunning and attempt < MAX_TRIES do
+                attempt += 1
+                setTruckStatus(string.format(
+                    "Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
+
+                for _, data in ipairs(missedList) do
+                    if not singleTruckRunning then break end
+                    local item = data.Instance
+                    if not (item and item.Parent) then continue end
+
+                    local tries = 0
+                    while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
+                        Char.HumanoidRootPart.CFrame = item.CFrame
+                        task.wait(0.1)
+                        tries += 1
+                    end
+
+                    RS.Interaction.ClientIsDragging:FireServer(item.Parent)
+                    task.wait(0.6)
+                    item.CFrame = data.TargetCFrame
+                    task.wait(0.2)
+                end
+
+                task.wait(1)
+                missedList = getMissed()
+                setTruckProg(missedTotal - #missedList, missedTotal)
+            end
+
+            if #missedList == 0 then
+                setTruckStatus("✓ All cargo teleported!", true)
+            else
+                setTruckStatus(string.format(
+                    "Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
+            end
+
+            setTruckProg(missedTotal, missedTotal)
+        else
+            setTruckStatus("✓ Truck teleported! (no cargo found)", false)
+        end
+
+        task.wait(1)
+        singleTruckRunning   = false
+        singleTruckThread    = nil
+        stopTruckBtn.Visible = false
+    end)
+end)
+
+-- Cleanup for single truck thread
+table.insert(VH.cleanupTasks, function()
+    singleTruckRunning = false
+    if singleTruckThread then pcall(task.cancel, singleTruckThread); singleTruckThread = nil end
 end)
 
 -- ════════════════════════════════════════════════════════════════════════════════
