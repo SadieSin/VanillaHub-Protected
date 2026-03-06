@@ -93,10 +93,26 @@ local alwaysDayToggleFrame = createWorldToggle("Always Day", false, function(v)
     end
 end)
 
--- Auto-enable Always Day 2 seconds after load
-task.delay(2, function()
+-- Auto-enable Always Day 1 second after load
+task.delay(1, function()
+    stopDayNight()
+    local L = game:GetService("Lighting")
+    L.ClockTime = 14
+    dayConn = game:GetService("RunService").Heartbeat:Connect(function()
+        L.ClockTime = 14
+    end)
     local tb = alwaysDayToggleFrame:FindFirstChildOfClass("TextButton")
-    if tb then tb.MouseButton1Click:Fire() end
+    if tb then
+        local circle = tb:FindFirstChildOfClass("Frame")
+        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+        }):Play()
+        if circle then
+            TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Position = UDim2.new(0, 18, 0.5, -7)
+            }):Play()
+        end
+    end
 end)
 
 createWorldToggle("Always Night", false, function(v)
