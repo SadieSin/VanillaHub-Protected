@@ -541,9 +541,9 @@ createDSection("What to Transfer")
 
 local _, getStructures = createDToggle("Structures",      false)
 local _, getFurniture  = createDToggle("Furniture",       false)
-local _, getTrucks     = createDToggle("Truck Load",      false)
+local _, getTrucks     = createDToggle("Truck+Cargo",      false)
 local _, getDupeItems  = createDToggle("Purchased Items", false)
-local _, getGifs       = createDToggle("Gift Items",      false)
+local _, getGifs       = createDToggle("Gift/Items",      false)
 local _, getWood       = createDToggle("Wood",            false)
 
 createDSep()
@@ -613,9 +613,9 @@ end
 
 local progStructures, setProgStructures, resetProgStructures = makeDupeProgress("Structures")
 local progFurniture,  setProgFurniture,  resetProgFurniture  = makeDupeProgress("Furniture")
-local progTrucks,     setProgTrucks,     resetProgTrucks     = makeDupeProgress("Truck Load")
+local progTrucks,     setProgTrucks,     resetProgTrucks     = makeDupeProgress("Truck+Cargo")
 local progItems,      setProgItems,      resetProgItems      = makeDupeProgress("Purchased Items")
-local progGifs,       setProgGifs,       resetProgGifs       = makeDupeProgress("Gift Items")
+local progGifs,       setProgGifs,       resetProgGifs       = makeDupeProgress("Gift/Items")
 local progWood,       setProgWood,       resetProgWood       = makeDupeProgress("Wood")
 
 createDSep()
@@ -637,7 +637,7 @@ table.insert(cleanupTasks, function()
     resetAllDupeProgress()
 end)
 
-createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
+createDBtn("Start Dupe", Color3.fromRGB(55,55,65), function()
     if _G.VH.butter.running then setDupeStatus("Already running!", true) return end
     local giverName    = getGiverName()
     local receiverName = getReceiverName()
@@ -1034,7 +1034,7 @@ createDBtn("Start Dupe", Color3.fromRGB(35,90,45), function()
     end)
 end)
 
-createDBtn("Cancel Dupe", BTN_COLOR, function()
+createDBtn("Cancel Dupe", Color3.fromRGB(55,55,65), function()
     _G.VH.butter.running = false
     if _G.VH.butter.thread then pcall(task.cancel, _G.VH.butter.thread) end
     _G.VH.butter.thread = nil
@@ -1070,7 +1070,7 @@ local function setSTStatus(msg, active)
     stDot.BackgroundColor3 = active and Color3.fromRGB(80,200,120) or Color3.fromRGB(80,80,100)
 end
 
-createDBtn("Teleport My Truck", Color3.fromRGB(60,40,100), function()
+createDBtn("Teleport My Truck", Color3.fromRGB(55,55,65), function()
     local giverName    = getSingleGiver()
     local receiverName = getSingleReceiver()
     if giverName == "" then
