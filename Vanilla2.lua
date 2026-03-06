@@ -1120,4 +1120,224 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
     end)
 end)
 
+-- ════════════════════════════════════════════════════════════════════════════════
+-- WORLD TAB
+-- ════════════════════════════════════════════════════════════════════════════════
+local worldPage = VH.pages["WorldTab"]
+
+if not worldPage then
+    warn("[VanillaHub] Vanilla2: WorldTab page not found.")
+else
+
+local Lighting = game:GetService("Lighting")
+
+-- ── Shared helpers (scoped to World tab) ─────────────────────────────────────
+local function wMakeLabel(parent, text)
+    local lbl = Instance.new("TextLabel", parent)
+    lbl.Size = UDim2.new(1, -12, 0, 22)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 11
+    lbl.TextColor3 = Color3.fromRGB(120, 120, 150)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = string.upper(text)
+    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0, 4)
+    return lbl
+end
+
+local function wMakeSep(parent)
+    local f = Instance.new("Frame", parent)
+    f.Size = UDim2.new(1, -12, 0, 1)
+    f.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    f.BorderSizePixel = 0
+    return f
+end
+
+local function wMakeToggle(parent, text, default, callback)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -12, 0, 32)
+    frame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+    frame.BorderSizePixel = 0
+    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1, -50, 1, 0)
+    lbl.Position = UDim2.new(0, 10, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamSemibold
+    lbl.TextSize = 13
+    lbl.TextColor3 = THEME_TEXT
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = text
+    local tb = Instance.new("TextButton", frame)
+    tb.Size = UDim2.new(0, 34, 0, 18)
+    tb.Position = UDim2.new(1, -44, 0.5, -9)
+    tb.BackgroundColor3 = default and Color3.fromRGB(60, 180, 60) or BTN_COLOR
+    tb.Text = ""; tb.BorderSizePixel = 0; tb.AutoButtonColor = false
+    Instance.new("UICorner", tb).CornerRadius = UDim.new(1, 0)
+    local knob = Instance.new("Frame", tb)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(0, default and 18 or 2, 0.5, -7)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local toggled = default
+    if callback then callback(toggled) end
+    tb.MouseButton1Click:Connect(function()
+        toggled = not toggled
+        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = toggled and Color3.fromRGB(60, 180, 60) or BTN_COLOR
+        }):Play()
+        TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
+        }):Play()
+        if callback then callback(toggled) end
+    end)
+    return frame, function() return toggled end
+end
+
+-- ── ENVIRONMENT ───────────────────────────────────────────────────────────────
+wMakeLabel(worldPage, "Environment")
+
+-- Store original fog values so we can restore them when toggled off
+local origFogEnd    = Lighting.FogEnd
+local origFogStart  = Lighting.FogStart
+local origFogColor  = Lighting.FogColor
+
+-- Always Day
+local alwaysDayConn
+wMakeToggle(worldPage, "Always Day", false, function(on)
+    if on then
+        Lighting.ClockTime = 14
+        alwaysDayConn = RunService.Heartbeat:Connect(function()
+            Lighting.ClockTime = 14
+        end)
+    else
+        if alwaysDayConn then alwaysDayConn:Disconnect(); alwaysDayConn = nil end
+    end
+end)
+table.insert(VH.cleanupTasks, function()
+    if alwaysDayConn then alwaysDayConn:Disconnect(); alwaysDayConn = nil end
+end)
+
+-- Always Night
+local alwaysNightConn
+wMakeToggle(worldPage, "Always Night", false, function(on)
+    if on then
+        Lighting.ClockTime = 0
+        alwaysNightConn = RunService.Heartbeat:Connect(function()
+            Lighting.ClockTime = 0
+        end)
+    else
+        if alwaysNightConn then alwaysNightConn:Disconnect(); alwaysNightConn = nil end
+    end
+end)
+table.insert(VH.cleanupTasks, function()
+    if alwaysNightConn then alwaysNightConn:Disconnect(); alwaysNightConn = nil end
+end)
+
+-- Remove Fog — when off restores the game's original fog values
+wMakeToggle(worldPage, "Remove Fog", false, function(on)
+    if on then
+        Lighting.FogEnd   = 1e6
+        Lighting.FogStart = 1e6
+    else
+        Lighting.FogEnd   = origFogEnd
+        Lighting.FogStart = origFogStart
+        Lighting.FogColor = origFogColor
+    end
+end)
+table.insert(VH.cleanupTasks, function()
+    Lighting.FogEnd   = origFogEnd
+    Lighting.FogStart = origFogStart
+    Lighting.FogColor = origFogColor
+end)
+
+-- Shadows
+local origShadows = Lighting.GlobalShadows
+wMakeToggle(worldPage, "Shadows", origShadows, function(on)
+    Lighting.GlobalShadows = on
+end)
+table.insert(VH.cleanupTasks, function()
+    Lighting.GlobalShadows = origShadows
+end)
+
+-- ── WORLD ─────────────────────────────────────────────────────────────────────
+wMakeSep(worldPage)
+wMakeLabel(worldPage, "World")
+-- (reserved for future features)
+
+-- ── WATER ─────────────────────────────────────────────────────────────────────
+wMakeSep(worldPage)
+wMakeLabel(worldPage, "Water")
+
+-- Walk On Water
+local walkWaterConn
+local walkWaterPart
+
+local function removeWalkWater()
+    if walkWaterConn then walkWaterConn:Disconnect(); walkWaterConn = nil end
+    if walkWaterPart and walkWaterPart.Parent then walkWaterPart:Destroy() end
+    walkWaterPart = nil
+end
+
+wMakeToggle(worldPage, "Walk On Water", false, function(on)
+    if on then
+        -- Create a large invisible platform that follows the player at water level
+        walkWaterPart = Instance.new("Part")
+        walkWaterPart.Name     = "WalkWaterPlane"
+        walkWaterPart.Size     = Vector3.new(40, 0.2, 40)
+        walkWaterPart.Anchored = true
+        walkWaterPart.CanCollide = true
+        walkWaterPart.Transparency = 1
+        walkWaterPart.Material = Enum.Material.SmoothPlastic
+        walkWaterPart.Parent   = workspace
+
+        walkWaterConn = RunService.Heartbeat:Connect(function()
+            local char = player.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            -- Keep the platform just under the player's feet, at water surface height (~0)
+            local pos = hrp.Position
+            if pos.Y < 8 then
+                walkWaterPart.CFrame = CFrame.new(pos.X, 0.1, pos.Z)
+            else
+                walkWaterPart.CFrame = CFrame.new(pos.X, -500, pos.Z) -- park it out of the way
+            end
+        end)
+    else
+        removeWalkWater()
+    end
+end)
+table.insert(VH.cleanupTasks, removeWalkWater)
+
+-- Remove Water
+local waterParts = {}
+
+local function restoreWater()
+    for part, transparency in pairs(waterParts) do
+        if part and part.Parent then
+            part.Transparency = transparency
+            part.CanCollide   = false
+        end
+    end
+    waterParts = {}
+end
+
+wMakeToggle(worldPage, "Remove Water", false, function(on)
+    if on then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.Material == Enum.Material.Water then
+                waterParts[obj] = obj.Transparency
+                obj.Transparency = 1
+                obj.CanCollide   = false
+            end
+        end
+    else
+        restoreWater()
+    end
+end)
+table.insert(VH.cleanupTasks, restoreWater)
+
+end -- worldPage guard
+
 print("[VanillaHub] Vanilla2 loaded — Butter Leak ready in Dupe tab")
