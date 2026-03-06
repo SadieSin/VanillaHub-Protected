@@ -677,11 +677,18 @@ runBtn.MouseButton1Click:Connect(function()
                         continue
                     end
 
+                    -- Guard: skip if the truck was removed while we worked on a prior one
+                    if not truckModel.Parent then
+                        truckDone += 1; setProgTrucks(truckDone, truckCount)
+                        continue
+                    end
+
                     driveSeat:Sit(Char.Humanoid)
 
                     -- Sit timeout: retry for up to 5 s before giving up on this truck
                     local sitTimer = 0
                     while not Char.Humanoid.SeatPart and sitTimer < 5 do
+                        if not truckModel.Parent then break end
                         driveSeat:Sit(Char.Humanoid)
                         task.wait(0.1)
                         sitTimer += 0.1
@@ -692,9 +699,20 @@ runBtn.MouseButton1Click:Connect(function()
                         continue
                     end
 
-                    local tModel   = Char.Humanoid.SeatPart.Parent
+                    -- Capture tModel from SeatPart NOW while we are confirmed seated
+                    local tModel = Char.Humanoid.SeatPart.Parent
+
+                    -- Guard: tModel must still be in the workspace
+                    if not (tModel and tModel.Parent) then
+                        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                        truckDone += 1; setProgTrucks(truckDone, truckCount)
+                        continue
+                    end
+
+                    -- Capture bounding box NOW (giver-side, before anything moves)
                     local mCF, mSz = tModel:GetBoundingBox()
 
+                    -- Mark all truck parts and character parts as ignored for cargo scan
                     for _, p in ipairs(tModel:GetDescendants()) do
                         if p:IsA("BasePart") then ignoredParts[p] = true end
                     end
@@ -702,68 +720,19 @@ runBtn.MouseButton1Click:Connect(function()
                         if p:IsA("BasePart") then ignoredParts[p] = true end
                     end
 
-                    -- ── Eject and close door FIRST, before any cargo work ──────
-                    -- Capture DoorHinge and SitPart references before anything moves
-                    local SitPart   = Char.Humanoid.SeatPart
-                    local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
-                        and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-                        and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+                    -- Capture door hinge reference before ejecting
+                    local DoorHinge = tModel:FindFirstChild("PaintParts")
+                        and tModel.PaintParts:FindFirstChild("DoorLeft")
+                        and tModel.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
 
-                    -- Eject: remove only the SeatWeld (NOT the seat itself — destroying
-                    -- the DriveSeat corrupts the truck model for all subsequent iterations).
-                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    task.wait(0.05)
-                    local seatWeld = SitPart:FindFirstChildOfClass("Weld")
-                        or SitPart:FindFirstChild("SeatWeld")
-                    if seatWeld then
-                        seatWeld:Destroy()
-                    end
-                    -- Fallback: if the weld wasn't found, use the VehicleSeat eject path
-                    if Char.Humanoid.SeatPart then
-                        if SitPart:IsA("VehicleSeat") then
-                            SitPart.Throttle = 0
-                            SitPart.Steer    = 0
-                        end
-                        -- Remove any remaining seat welds from the character side
-                        for _, w in ipairs(Char:GetDescendants()) do
-                            if w:IsA("Weld") and (w.Part0 == SitPart or w.Part1 == SitPart) then
-                                w:Destroy()
-                            end
-                        end
-                    end
-
-                    -- Wait until the humanoid is confirmed unseated
-                    local ejectWait = 0
-                    while Char.Humanoid.SeatPart and ejectWait < 2 do
-                        task.wait(0.05)
-                        ejectWait += 0.05
-                    end
-
-                    -- Close the door
-                    if DoorHinge then
-                        for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
-                    end
-
-                    task.wait(0.1)
-
-                    -- ── Now teleport the truck body and scan for cargo ──────────
-                    -- TeleportTruck() relies on SeatPart which is now nil after eject,
-                    -- so teleport tModel directly using the already-captured mCF.
-                    local truckMain = tModel:FindFirstChild("Main")
-                    if truckMain then
-                        local nPos = truckMain.CFrame.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                        tModel:SetPrimaryPartCFrame(CFrame.new(nPos) * truckMain.CFrame.Rotation)
-                    end
-                    DidTruckTeleport = false
-
-                    task.wait(0.1)
-
-                    -- Scan cargo: use original mCF/mSz (giver side) to detect what
-                    -- was inside the truck before it moved.
+                    -- ── Scan cargo BEFORE moving anything ─────────────────────
+                    -- We capture cargo positions while the truck is still at the
+                    -- giver's base so the bounding-box check is accurate.
                     local cargoToMove = {}
                     for _, part in ipairs(workspace:GetDescendants()) do
                         if part:IsA("BasePart") and not ignoredParts[part] then
                             if part.Name == "Main" or part.Name == "WoodSection" then
+                                -- Skip parts that are welded to a different parent model
                                 if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then continue end
                                 local capturedCF = part.CFrame
                                 if isPointInside(capturedCF.Position, mCF, mSz) then
@@ -774,6 +743,55 @@ runBtn.MouseButton1Click:Connect(function()
                             end
                         end
                     end
+
+                    -- ── Eject safely (do NOT destroy the seat) ────────────────
+                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    task.wait(0.05)
+                    -- Remove the seat weld without destroying the seat part itself
+                    local seatWeld = Char.HumanoidRootPart:FindFirstChild("SeatWeld")
+                        or Char.HumanoidRootPart:FindFirstChildWhichIsA("Weld")
+                    if seatWeld then seatWeld:Destroy() end
+                    -- Also clear via the seat's own method if still attached
+                    if Char.Humanoid.SeatPart then
+                        pcall(function() Char.Humanoid.SeatPart:Sit(nil) end)
+                    end
+
+                    -- Wait until the humanoid is confirmed unseated (up to 2 s)
+                    local ejectWait = 0
+                    while Char.Humanoid.SeatPart and ejectWait < 2 do
+                        task.wait(0.05)
+                        ejectWait += 0.05
+                    end
+
+                    -- Close the door
+                    if DoorHinge then
+                        for i = 1, 10 do
+                            pcall(function() RS.Interaction.RemoteProxy:FireServer(DoorHinge) end)
+                        end
+                    end
+
+                    task.wait(0.1)
+
+                    -- ── Teleport the truck body ────────────────────────────────
+                    -- Guard: ensure tModel is still valid after the eject sequence
+                    if tModel and tModel.Parent then
+                        local truckMain = tModel:FindFirstChild("Main")
+                        if truckMain then
+                            local nPos = truckMain.CFrame.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                            local targetCF = CFrame.new(nPos) * truckMain.CFrame.Rotation
+                            -- Use SetPrimaryPartCFrame only if PrimaryPart is set; fall back to moving Main directly
+                            if tModel.PrimaryPart then
+                                pcall(function() tModel:SetPrimaryPartCFrame(targetCF) end)
+                            else
+                                tModel.PrimaryPart = truckMain
+                                pcall(function() tModel:SetPrimaryPartCFrame(targetCF) end)
+                                tModel.PrimaryPart = nil
+                            end
+                        end
+                    end
+                    DidTruckTeleport = false
+
+                    task.wait(0.1)
 
                     for _, cargo in ipairs(cargoToMove) do
                         pendingSpawns += 1
