@@ -82,7 +82,7 @@ table.insert(cleanupTasks, stopDayNight)
 
 createWSectionLabel("Environment")
 
-createWorldToggle("Always Day", true, function(v)
+local alwaysDayFrame = createWorldToggle("Always Day", false, function(v)
     if v then
         stopDayNight()
         local L = game:GetService("Lighting")
@@ -92,6 +92,29 @@ createWorldToggle("Always Day", true, function(v)
         end)
     else
         if dayConn then dayConn:Disconnect(); dayConn = nil end
+    end
+end)
+
+task.delay(1, function()
+    -- directly start the heartbeat
+    stopDayNight()
+    local L = game:GetService("Lighting")
+    L.ClockTime = 14
+    dayConn = game:GetService("RunService").Heartbeat:Connect(function()
+        L.ClockTime = 14
+    end)
+    -- animate the toggle to ON visually
+    local tb = alwaysDayFrame and alwaysDayFrame:FindFirstChildOfClass("TextButton")
+    if tb then
+        local knob = tb:FindFirstChildOfClass("Frame")
+        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+        }):Play()
+        if knob then
+            TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Position = UDim2.new(0, 18, 0.5, -7)
+            }):Play()
+        end
     end
 end)
 
