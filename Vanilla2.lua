@@ -709,10 +709,28 @@ runBtn.MouseButton1Click:Connect(function()
                         and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
                         and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
 
-                    -- Eject: jump state first, then destroy the seat weld
+                    -- Eject: remove only the SeatWeld (NOT the seat itself — destroying
+                    -- the DriveSeat corrupts the truck model for all subsequent iterations).
                     Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
                     task.wait(0.05)
-                    SitPart:Destroy()
+                    local seatWeld = SitPart:FindFirstChildOfClass("Weld")
+                        or SitPart:FindFirstChild("SeatWeld")
+                    if seatWeld then
+                        seatWeld:Destroy()
+                    end
+                    -- Fallback: if the weld wasn't found, use the VehicleSeat eject path
+                    if Char.Humanoid.SeatPart then
+                        if SitPart:IsA("VehicleSeat") then
+                            SitPart.Throttle = 0
+                            SitPart.Steer    = 0
+                        end
+                        -- Remove any remaining seat welds from the character side
+                        for _, w in ipairs(Char:GetDescendants()) do
+                            if w:IsA("Weld") and (w.Part0 == SitPart or w.Part1 == SitPart) then
+                                w:Destroy()
+                            end
+                        end
+                    end
 
                     -- Wait until the humanoid is confirmed unseated
                     local ejectWait = 0
