@@ -786,18 +786,22 @@ runBtn.MouseButton1Click:Connect(function()
                             RS.Interaction.ClientIsDragging:FireServer(item.Parent)
                             task.wait(0.6)
                             item.CFrame = data.TargetCFrame
-                            task.wait(0.2)
+                            task.wait(0.3)
 
                             -- Update progress immediately after each individual item
                             itemsDone += 1
                             setProgTrucks(itemsDone, missedTotal)
+                            task.wait() -- yield so the UI tween actually renders
                         end
 
                         task.wait(1)
                         missedList = getMissed()
-                        -- Sync to confirmed count after each full pass
-                        itemsDone = missedTotal - #missedList
-                        setProgTrucks(itemsDone, missedTotal)
+                        -- Only advance itemsDone forward, never backwards
+                        local confirmed = missedTotal - #missedList
+                        if confirmed > itemsDone then
+                            itemsDone = confirmed
+                            setProgTrucks(itemsDone, missedTotal)
+                        end
                     end
 
                     if #missedList == 0 then
@@ -1145,18 +1149,22 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
                     RS.Interaction.ClientIsDragging:FireServer(item.Parent)
                     task.wait(0.6)
                     item.CFrame = data.TargetCFrame
-                    task.wait(0.2)
+                    task.wait(0.3)
 
                     -- Update progress immediately after each individual item
                     itemsDone += 1
                     setTruckProg(itemsDone, missedTotal)
+                    task.wait() -- yield so the UI tween actually renders
                 end
 
                 task.wait(1)
                 missedList = getMissed()
-                -- Sync to confirmed count after each full pass
-                itemsDone = missedTotal - #missedList
-                setTruckProg(itemsDone, missedTotal)
+                -- Only advance itemsDone forward, never backwards
+                local confirmed = missedTotal - #missedList
+                if confirmed > itemsDone then
+                    itemsDone = confirmed
+                    setTruckProg(itemsDone, missedTotal)
+                end
             end
 
             if #missedList == 0 then
