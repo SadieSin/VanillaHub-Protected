@@ -82,7 +82,7 @@ end)
 
 createWSectionLabel("Environment")
 
-createWorldToggle("Always Day", true, function(v)
+local alwaysDayToggleFrame = createWorldToggle("Always Day", false, function(v)
     alwaysDayActive = v
     if worldClockConn then worldClockConn:Disconnect(); worldClockConn = nil end
     if v then
@@ -92,6 +92,14 @@ createWorldToggle("Always Day", true, function(v)
         worldClockConn = game:GetService("RunService").Heartbeat:Connect(function()
             Lighting.ClockTime = 14
         end)
+    end
+end)
+
+-- Auto-click Always Day 2 seconds after load
+task.delay(2, function()
+    local tb = alwaysDayToggleFrame:FindFirstChildOfClass("TextButton")
+    if tb then tb:GetPropertyChangedSignal("BackgroundColor3") -- ensure UI is ready
+        tb.MouseButton1Click:Fire()
     end
 end)
 
