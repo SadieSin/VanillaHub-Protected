@@ -654,7 +654,6 @@ runBtn.MouseButton1Click:Connect(function()
                 setStatus("Sending trucks...", true)
                 local truckDone = 0
 
-                -- Phase 1: teleport all trucks
                 for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                     if not butterRunning then break end
                     if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
@@ -683,7 +682,6 @@ runBtn.MouseButton1Click:Connect(function()
                                             local tOff = CFrame.new(nP) * PCF.Rotation
                                             part.CFrame = tOff
                                             task.wait(0.3)
-                                            -- record where it actually landed after the attempt
                                             table.insert(teleportedParts, {
                                                 Instance     = part,
                                                 OldPos       = part.Position,
@@ -709,11 +707,7 @@ runBtn.MouseButton1Click:Connect(function()
                     end
                 end
 
-
-                -- Phase 2: retry any cargo that didn't reach TargetCFrame, up to 25 times
-                -- "Missed" = current position is more than 8 studs from where we wanted it
-                -- We warp directly to each item (wherever it is) to grab it
-                task.wait(2) -- give task.spawns time to finish recording
+                task.wait(2)
 
                 local cargoTotal = #teleportedParts
                 local cargoDone  = 0
@@ -749,7 +743,6 @@ runBtn.MouseButton1Click:Connect(function()
                             local item = data.Instance
                             if not (item and item.Parent) then continue end
 
-                            -- Warp directly to the item (it could be anywhere — giver OR receiver side)
                             local tries = 0
                             while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
                                 Char.HumanoidRootPart.CFrame = item.CFrame
@@ -873,7 +866,6 @@ runBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
--- Register cleanup with Vanilla1 so closing the hub stops any running dupe
 table.insert(VH.cleanupTasks, function()
     butterRunning = false; VH.butter.running = false
     if butterThread then pcall(task.cancel, butterThread); butterThread = nil end
@@ -882,7 +874,6 @@ end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- SINGLE TRUCK TELEPORT
--- Sit inside a truck, fill in Giver + Receiver, then hit "Teleport Truck".
 -- ══════════════════════════════════════════════════════════════════════════════
 
 makeSep(dupePage)
@@ -891,7 +882,6 @@ makeLabel(dupePage, "Single Truck Teleport")
 local _, getTruckGiverName    = makeDupeDropdown("Giver",    dupePage)
 local _, getTruckReceiverName = makeDupeDropdown("Receiver", dupePage)
 
--- Status bar for the truck-teleport section
 local truckStatusBar = Instance.new("Frame", dupePage)
 truckStatusBar.Size = UDim2.new(1, -12, 0, 28)
 truckStatusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24); truckStatusBar.BorderSizePixel = 0
@@ -993,7 +983,6 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
             DidTruckTeleport = true
         end
 
-        -- Phase 1: sit in the truck, scan + teleport cargo, then eject
         truckProgBar.Visible = true
         setTruckProg(0, 1)
 
@@ -1045,8 +1034,7 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
         end
         setTruckProg(1, 1)
 
-        -- Phase 2: retry missed cargo up to 25 times
-        task.wait(2) -- give task.spawns time to finish recording
+        task.wait(2)
 
         local cargoTotal = #teleportedParts
         local cargoDone  = 0
@@ -1129,7 +1117,8 @@ if not worldPage then
     warn("[VanillaHub] Vanilla2: WorldTab page not found.")
 else
 
-local Lighting = game:GetService("Lighting")
+local Lighting   = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
 -- ── Shared helpers (scoped to World tab) ─────────────────────────────────────
 local function wMakeLabel(parent, text)
@@ -1198,67 +1187,73 @@ end
 -- ── ENVIRONMENT ───────────────────────────────────────────────────────────────
 wMakeLabel(worldPage, "Environment")
 
--- Snapshot original Lighting values at load time
-local origClockTime  = Lighting.ClockTime
-local origFogEnd     = Lighting.FogEnd
-local origFogStart   = Lighting.FogStart
-local origFogColor   = Lighting.FogColor
-local origShadows    = Lighting.GlobalShadows
+-- Snapshot originals at load time
+local origClockTime = Lighting.ClockTime
+local origFogEnd    = Lighting.FogEnd
+local origFogStart  = Lighting.FogStart
+local origFogColor  = Lighting.FogColor
+local origShadows   = Lighting.GlobalShadows
 
--- Flags so the Changed listeners know which overrides are active
+-- State flags
 local alwaysDayOn   = false
 local alwaysNightOn = false
 local noFogOn       = false
-local noShadowsOn   = false  -- "Shadows" toggle means shadows are OFF when true
+local noShadowsOn   = false
 
--- Master Lighting.Changed listener — fights the server's resets for all env toggles
-local lightingChangedConn = Lighting.Changed:Connect(function(prop)
-    if alwaysDayOn and prop == "ClockTime" then
+-- Heartbeat loop — enforces all environment overrides every frame
+-- This beats the server's continuous ClockTime and Lighting updates
+local envHeartbeat = RunService.Heartbeat:Connect(function()
+    if alwaysDayOn then
         Lighting.ClockTime = 14
-    end
-    if alwaysNightOn and prop == "ClockTime" then
+    elseif alwaysNightOn then
         Lighting.ClockTime = 0
     end
-    if noFogOn and (prop == "FogEnd" or prop == "FogStart" or prop == "FogColor") then
-        Lighting.FogEnd   = 1e6
-        Lighting.FogStart = 1e6
+    if noFogOn then
+        Lighting.FogEnd   = 600
+        Lighting.FogStart = 400
+        Lighting.FogColor = Color3.fromRGB(210, 210, 215)
     end
-    if noShadowsOn and prop == "GlobalShadows" then
+    if noShadowsOn then
         Lighting.GlobalShadows = false
     end
 end)
 table.insert(VH.cleanupTasks, function()
-    if lightingChangedConn then lightingChangedConn:Disconnect(); lightingChangedConn = nil end
+    if envHeartbeat then envHeartbeat:Disconnect(); envHeartbeat = nil end
 end)
 
 -- Always Day
 wMakeToggle(worldPage, "Always Day", false, function(on)
-    alwaysDayOn   = on
-    alwaysNightOn = false   -- mutually exclusive
+    alwaysDayOn = on
     if on then
+        alwaysNightOn = false
         Lighting.ClockTime = 14
     else
-        Lighting.ClockTime = origClockTime
+        if not alwaysNightOn then
+            Lighting.ClockTime = origClockTime
+        end
     end
 end)
 
 -- Always Night
 wMakeToggle(worldPage, "Always Night", false, function(on)
     alwaysNightOn = on
-    alwaysDayOn   = false   -- mutually exclusive
     if on then
+        alwaysDayOn = false
         Lighting.ClockTime = 0
     else
-        Lighting.ClockTime = origClockTime
+        if not alwaysDayOn then
+            Lighting.ClockTime = origClockTime
+        end
     end
 end)
 
--- Remove Fog — restores the game's original fog when turned off
+-- Remove Fog — soft grey-white mist, enforced on Heartbeat
 wMakeToggle(worldPage, "Remove Fog", false, function(on)
     noFogOn = on
     if on then
-        Lighting.FogEnd   = 1e6
-        Lighting.FogStart = 1e6
+        Lighting.FogEnd   = 600
+        Lighting.FogStart = 400
+        Lighting.FogColor = Color3.fromRGB(210, 210, 215)
     else
         Lighting.FogEnd   = origFogEnd
         Lighting.FogStart = origFogStart
@@ -1266,7 +1261,7 @@ wMakeToggle(worldPage, "Remove Fog", false, function(on)
     end
 end)
 
--- Shadows — toggle is ON = shadows disabled
+-- Shadows (ON = shadows disabled)
 wMakeToggle(worldPage, "Shadows", false, function(on)
     noShadowsOn = on
     Lighting.GlobalShadows = not on
@@ -1287,94 +1282,100 @@ end)
 -- ── WORLD ─────────────────────────────────────────────────────────────────────
 wMakeSep(worldPage)
 wMakeLabel(worldPage, "World")
--- (reserved for future features)
 
 -- ── WATER ─────────────────────────────────────────────────────────────────────
 wMakeSep(worldPage)
 wMakeLabel(worldPage, "Water")
 
 -- Walk On Water
--- Uses a Heartbeat loop to detect when the player enters water and
--- continuously pushes them to the surface, preventing submersion.
 local walkWaterConn
+local walkWaterCharConn
 
 local function removeWalkWater()
     if walkWaterConn then walkWaterConn:Disconnect(); walkWaterConn = nil end
+    if walkWaterCharConn then walkWaterCharConn:Disconnect(); walkWaterCharConn = nil end
     local char = player.Character
-    local hum  = char and char:FindFirstChild("Humanoid")
+    local hum  = char and char:FindFirstChildOfClass("Humanoid")
     if hum then
-        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, true)
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+            hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, true)
+        end)
     end
 end
 
+local function applyWalkWater(char)
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
+    if not hum then return end
+    pcall(function()
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
+    end)
+end
+
 wMakeToggle(worldPage, "Walk On Water", false, function(on)
-    if on then
-        local function applyToChar(char)
-            local hum = char:WaitForChild("Humanoid", 5)
-            local hrp = char:WaitForChild("HumanoidRootPart", 5)
-            if not (hum and hrp) then return end
+    removeWalkWater()
+    if not on then return end
+
+    local char = player.Character
+    if char then task.spawn(applyWalkWater, char) end
+
+    -- Re-apply on respawn
+    walkWaterCharConn = player.CharacterAdded:Connect(function(newChar)
+        task.spawn(applyWalkWater, newChar)
+    end)
+
+    -- Heartbeat: keep swim states disabled and surface the player if they enter water
+    walkWaterConn = RunService.Heartbeat:Connect(function()
+        local c   = player.Character
+        local hum = c and c:FindFirstChildOfClass("Humanoid")
+        local hrp = c and c:FindFirstChild("HumanoidRootPart")
+        if not (hum and hrp) then return end
+
+        pcall(function()
             hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
             hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
-        end
-
-        local char = player.Character
-        if char then task.spawn(applyToChar, char) end
-
-        walkWaterConn = RunService.Heartbeat:Connect(function()
-            if not walkWaterConn then return end
-            local c   = player.Character
-            local hum = c and c:FindFirstChild("Humanoid")
-            local hrp = c and c:FindFirstChild("HumanoidRootPart")
-            if not (hum and hrp) then return end
-
-            -- Disable swim states every frame so the server can't re-enable them
-            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
-
-            -- If the humanoid is in a swimming state, yank them up to surface
-            local state = hum:GetState()
-            if state == Enum.HumanoidStateType.Swimming
-            or state == Enum.HumanoidStateType.SwimmingRotating then
-                local pos = hrp.Position
-                hrp.CFrame = CFrame.new(pos.X, pos.Y + 2, pos.Z)
-                hum:ChangeState(Enum.HumanoidStateType.Running)
-            end
         end)
-    else
-        removeWalkWater()
-    end
+
+        local state = hum:GetState()
+        if state == Enum.HumanoidStateType.Swimming
+        or state == Enum.HumanoidStateType.SwimmingRotating then
+            hrp.CFrame = CFrame.new(hrp.Position.X, hrp.Position.Y + 3, hrp.Position.Z)
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.Running) end)
+        end
+    end)
 end)
 table.insert(VH.cleanupTasks, removeWalkWater)
 
--- Remove Water
--- Terrain:ReplaceMaterial is server-side only so we instead make the water
--- invisible by zeroing out the Terrain water visual properties client-side.
--- Toggling off restores the original values.
-local origWaterTransparency  = workspace.Terrain.WaterTransparency
-local origWaterWaveSize      = workspace.Terrain.WaterWaveSize
-local origWaterWaveSpeed     = workspace.Terrain.WaterWaveSpeed
-local origWaterReflectance   = workspace.Terrain.WaterReflectance
+-- Remove Water (client-side: make terrain water invisible)
+local origWaterTransparency = workspace.Terrain.WaterTransparency
+local origWaterWaveSize     = workspace.Terrain.WaterWaveSize
+local origWaterWaveSpeed    = workspace.Terrain.WaterWaveSpeed
+local origWaterReflectance  = workspace.Terrain.WaterReflectance
 
-wMakeToggle(worldPage, "Remove Water", false, function(on)
-    if on then
-        workspace.Terrain.WaterTransparency = 1
-        workspace.Terrain.WaterWaveSize     = 0
-        workspace.Terrain.WaterWaveSpeed    = 0
-        workspace.Terrain.WaterReflectance  = 0
-    else
+local function restoreWater()
+    pcall(function()
         workspace.Terrain.WaterTransparency = origWaterTransparency
         workspace.Terrain.WaterWaveSize     = origWaterWaveSize
         workspace.Terrain.WaterWaveSpeed    = origWaterWaveSpeed
         workspace.Terrain.WaterReflectance  = origWaterReflectance
+    end)
+end
+
+wMakeToggle(worldPage, "Remove Water", false, function(on)
+    if on then
+        pcall(function()
+            workspace.Terrain.WaterTransparency = 1
+            workspace.Terrain.WaterWaveSize     = 0
+            workspace.Terrain.WaterWaveSpeed    = 0
+            workspace.Terrain.WaterReflectance  = 0
+        end)
+    else
+        restoreWater()
     end
 end)
-table.insert(VH.cleanupTasks, function()
-    workspace.Terrain.WaterTransparency = origWaterTransparency
-    workspace.Terrain.WaterWaveSize     = origWaterWaveSize
-    workspace.Terrain.WaterWaveSpeed    = origWaterWaveSpeed
-    workspace.Terrain.WaterReflectance  = origWaterReflectance
-end)
+table.insert(VH.cleanupTasks, restoreWater)
 
 end -- worldPage guard
 
