@@ -1198,45 +1198,64 @@ end
 -- ── ENVIRONMENT ───────────────────────────────────────────────────────────────
 wMakeLabel(worldPage, "Environment")
 
--- Store original fog values so we can restore them when toggled off
-local origFogEnd    = Lighting.FogEnd
-local origFogStart  = Lighting.FogStart
-local origFogColor  = Lighting.FogColor
+-- Snapshot original Lighting values at load time
+local origClockTime  = Lighting.ClockTime
+local origFogEnd     = Lighting.FogEnd
+local origFogStart   = Lighting.FogStart
+local origFogColor   = Lighting.FogColor
+local origShadows    = Lighting.GlobalShadows
 
--- Always Day
-local alwaysDayConn
-wMakeToggle(worldPage, "Always Day", false, function(on)
-    if on then
+-- Flags so the Changed listeners know which overrides are active
+local alwaysDayOn   = false
+local alwaysNightOn = false
+local noFogOn       = false
+local noShadowsOn   = false  -- "Shadows" toggle means shadows are OFF when true
+
+-- Master Lighting.Changed listener — fights the server's resets for all env toggles
+local lightingChangedConn = Lighting.Changed:Connect(function(prop)
+    if alwaysDayOn and prop == "ClockTime" then
         Lighting.ClockTime = 14
-        alwaysDayConn = RunService.Heartbeat:Connect(function()
-            Lighting.ClockTime = 14
-        end)
-    else
-        if alwaysDayConn then alwaysDayConn:Disconnect(); alwaysDayConn = nil end
+    end
+    if alwaysNightOn and prop == "ClockTime" then
+        Lighting.ClockTime = 0
+    end
+    if noFogOn and (prop == "FogEnd" or prop == "FogStart" or prop == "FogColor") then
+        Lighting.FogEnd   = 1e6
+        Lighting.FogStart = 1e6
+    end
+    if noShadowsOn and prop == "GlobalShadows" then
+        Lighting.GlobalShadows = false
     end
 end)
 table.insert(VH.cleanupTasks, function()
-    if alwaysDayConn then alwaysDayConn:Disconnect(); alwaysDayConn = nil end
+    if lightingChangedConn then lightingChangedConn:Disconnect(); lightingChangedConn = nil end
+end)
+
+-- Always Day
+wMakeToggle(worldPage, "Always Day", false, function(on)
+    alwaysDayOn   = on
+    alwaysNightOn = false   -- mutually exclusive
+    if on then
+        Lighting.ClockTime = 14
+    else
+        Lighting.ClockTime = origClockTime
+    end
 end)
 
 -- Always Night
-local alwaysNightConn
 wMakeToggle(worldPage, "Always Night", false, function(on)
+    alwaysNightOn = on
+    alwaysDayOn   = false   -- mutually exclusive
     if on then
         Lighting.ClockTime = 0
-        alwaysNightConn = RunService.Heartbeat:Connect(function()
-            Lighting.ClockTime = 0
-        end)
     else
-        if alwaysNightConn then alwaysNightConn:Disconnect(); alwaysNightConn = nil end
+        Lighting.ClockTime = origClockTime
     end
 end)
-table.insert(VH.cleanupTasks, function()
-    if alwaysNightConn then alwaysNightConn:Disconnect(); alwaysNightConn = nil end
-end)
 
--- Remove Fog — when off restores the game's original fog values
+-- Remove Fog — restores the game's original fog when turned off
 wMakeToggle(worldPage, "Remove Fog", false, function(on)
+    noFogOn = on
     if on then
         Lighting.FogEnd   = 1e6
         Lighting.FogStart = 1e6
@@ -1246,18 +1265,22 @@ wMakeToggle(worldPage, "Remove Fog", false, function(on)
         Lighting.FogColor = origFogColor
     end
 end)
-table.insert(VH.cleanupTasks, function()
-    Lighting.FogEnd   = origFogEnd
-    Lighting.FogStart = origFogStart
-    Lighting.FogColor = origFogColor
+
+-- Shadows — toggle is ON = shadows disabled
+wMakeToggle(worldPage, "Shadows", false, function(on)
+    noShadowsOn = on
+    Lighting.GlobalShadows = not on
 end)
 
--- Shadows
-local origShadows = Lighting.GlobalShadows
-wMakeToggle(worldPage, "Shadows", origShadows, function(on)
-    Lighting.GlobalShadows = on
-end)
 table.insert(VH.cleanupTasks, function()
+    alwaysDayOn   = false
+    alwaysNightOn = false
+    noFogOn       = false
+    noShadowsOn   = false
+    Lighting.ClockTime     = origClockTime
+    Lighting.FogEnd        = origFogEnd
+    Lighting.FogStart      = origFogStart
+    Lighting.FogColor      = origFogColor
     Lighting.GlobalShadows = origShadows
 end)
 
@@ -1271,37 +1294,35 @@ wMakeSep(worldPage)
 wMakeLabel(worldPage, "Water")
 
 -- Walk On Water
+-- LT2 uses Terrain water. We disable the Swimming humanoid state so the
+-- character walks on the water surface instead of sinking into it.
 local walkWaterConn
-local walkWaterPart
 
 local function removeWalkWater()
     if walkWaterConn then walkWaterConn:Disconnect(); walkWaterConn = nil end
-    if walkWaterPart and walkWaterPart.Parent then walkWaterPart:Destroy() end
-    walkWaterPart = nil
+    -- Re-enable swimming state
+    local char = player.Character
+    local hum  = char and char:FindFirstChild("Humanoid")
+    if hum then
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, true)
+    end
 end
 
 wMakeToggle(worldPage, "Walk On Water", false, function(on)
     if on then
-        -- Create a large invisible platform that follows the player at water level
-        walkWaterPart = Instance.new("Part")
-        walkWaterPart.Name     = "WalkWaterPlane"
-        walkWaterPart.Size     = Vector3.new(40, 0.2, 40)
-        walkWaterPart.Anchored = true
-        walkWaterPart.CanCollide = true
-        walkWaterPart.Transparency = 1
-        walkWaterPart.Material = Enum.Material.SmoothPlastic
-        walkWaterPart.Parent   = workspace
-
-        walkWaterConn = RunService.Heartbeat:Connect(function()
-            local char = player.Character
-            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-            if not hrp then return end
-            -- Keep the platform just under the player's feet, at water surface height (~0)
-            local pos = hrp.Position
-            if pos.Y < 8 then
-                walkWaterPart.CFrame = CFrame.new(pos.X, 0.1, pos.Z)
-            else
-                walkWaterPart.CFrame = CFrame.new(pos.X, -500, pos.Z) -- park it out of the way
+        local char = player.Character
+        local hum  = char and char:FindFirstChild("Humanoid")
+        if hum then
+            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+            hum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
+        end
+        -- Re-apply on respawn
+        walkWaterConn = player.CharacterAdded:Connect(function(newChar)
+            local newHum = newChar:WaitForChild("Humanoid", 5)
+            if newHum and walkWaterConn then
+                newHum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+                newHum:SetStateEnabled(Enum.HumanoidStateType.SwimmingRotating, false)
             end
         end)
     else
@@ -1311,32 +1332,60 @@ end)
 table.insert(VH.cleanupTasks, removeWalkWater)
 
 -- Remove Water
-local waterParts = {}
+-- LT2 water is Terrain. We use Terrain:ReplaceMaterial to swap Water→Air
+-- client-side, and swap back on toggle off.
+local removeWaterOn = false
 
-local function restoreWater()
-    for part, transparency in pairs(waterParts) do
-        if part and part.Parent then
-            part.Transparency = transparency
-            part.CanCollide   = false
-        end
-    end
-    waterParts = {}
+local function applyRemoveWater()
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if not terrain then return end
+    pcall(function()
+        terrain:ReplaceMaterial(workspace.FallenPartsDestroyHeight ~= nil
+            and Region3.new(
+                Vector3.new(-5000, -500, -5000),
+                Vector3.new( 5000,  500,  5000)
+            )
+            or Region3.new(
+                Vector3.new(-5000, -500, -5000),
+                Vector3.new( 5000,  500,  5000)
+            ),
+            4,  -- resolution
+            Enum.Material.Water,
+            Enum.Material.Air
+        )
+    end)
+end
+
+local function applyRestoreWater()
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if not terrain then return end
+    pcall(function()
+        terrain:ReplaceMaterial(
+            Region3.new(
+                Vector3.new(-5000, -500, -5000),
+                Vector3.new( 5000,  500,  5000)
+            ),
+            4,
+            Enum.Material.Air,
+            Enum.Material.Water
+        )
+    end)
 end
 
 wMakeToggle(worldPage, "Remove Water", false, function(on)
+    removeWaterOn = on
     if on then
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("BasePart") and obj.Material == Enum.Material.Water then
-                waterParts[obj] = obj.Transparency
-                obj.Transparency = 1
-                obj.CanCollide   = false
-            end
-        end
+        applyRemoveWater()
     else
-        restoreWater()
+        applyRestoreWater()
     end
 end)
-table.insert(VH.cleanupTasks, restoreWater)
+table.insert(VH.cleanupTasks, function()
+    if removeWaterOn then
+        applyRestoreWater()
+        removeWaterOn = false
+    end
+end)
 
 end -- worldPage guard
 
