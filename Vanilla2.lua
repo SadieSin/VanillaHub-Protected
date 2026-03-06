@@ -632,9 +632,6 @@ runBtn.MouseButton1Click:Connect(function()
             local teleportedParts  = {}
             local ignoredParts     = {}
             local DidTruckTeleport = false
-            -- Tracks how many cargo task.spawns are still running so phase 2
-            -- never starts before every spawn has finished inserting.
-            local pendingSpawns    = 0
 
             local function TeleportTruck()
                 if DidTruckTeleport then return end
@@ -645,256 +642,143 @@ runBtn.MouseButton1Click:Connect(function()
                 DidTruckTeleport = true
             end
 
-            -- Snapshot all truck models BEFORE iterating so that destroying/moving
-            -- trucks during the loop can't corrupt the iterator.
-            local truckModels = {}
+            local truckCount = 0
             for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-                if v.Name == "Owner" and tostring(v.Value) == giverName
-                    and v.Parent:FindFirstChild("DriveSeat") then
-                    table.insert(truckModels, v.Parent)
+                if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
+                    truckCount += 1
                 end
             end
-            local truckCount = #truckModels
 
             if truckCount > 0 then
                 progTrucks.Visible = true; setProgTrucks(0, truckCount)
                 setStatus("Sending trucks...", true)
                 local truckDone = 0
 
-                -- Phase 1: teleport all trucks using the pre-built snapshot list
-                for _, truckModel in ipairs(truckModels) do
+                -- Phase 1: teleport all trucks
+                for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                     if not butterRunning then break end
+                    if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
+                        v.Parent.DriveSeat:Sit(Char.Humanoid)
+                        repeat task.wait() v.Parent.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
 
-                    -- Skip trucks removed while we were working on earlier ones
-                    if not truckModel.Parent then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount)
-                        continue
-                    end
+                        local tModel    = Char.Humanoid.SeatPart.Parent
+                        local mCF, mSz  = tModel:GetBoundingBox()
 
-                    local driveSeat = truckModel:FindFirstChild("DriveSeat")
-                    if not driveSeat then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount)
-                        continue
-                    end
+                        for _, p in ipairs(tModel:GetDescendants()) do
+                            if p:IsA("BasePart") then ignoredParts[p] = true end
+                        end
+                        for _, p in ipairs(Char:GetDescendants()) do
+                            if p:IsA("BasePart") then ignoredParts[p] = true end
+                        end
 
-                    -- Guard: skip if the truck was removed while we worked on a prior one
-                    if not truckModel.Parent then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount)
-                        continue
-                    end
-
-                    driveSeat:Sit(Char.Humanoid)
-
-                    -- Sit timeout: retry for up to 5 s before giving up on this truck
-                    local sitTimer = 0
-                    while not Char.Humanoid.SeatPart and sitTimer < 5 do
-                        if not truckModel.Parent then break end
-                        driveSeat:Sit(Char.Humanoid)
-                        task.wait(0.1)
-                        sitTimer += 0.1
-                    end
-
-                    if not Char.Humanoid.SeatPart then
-                        truckDone += 1; setProgTrucks(truckDone, truckCount)
-                        continue
-                    end
-
-                    -- Capture tModel from SeatPart NOW while we are confirmed seated
-                    local tModel = Char.Humanoid.SeatPart.Parent
-
-                    -- Guard: tModel must still be in the workspace
-                    if not (tModel and tModel.Parent) then
-                        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                        truckDone += 1; setProgTrucks(truckDone, truckCount)
-                        continue
-                    end
-
-                    -- Capture bounding box NOW (giver-side, before anything moves)
-                    local mCF, mSz = tModel:GetBoundingBox()
-
-                    -- Mark all truck parts and character parts as ignored for cargo scan
-                    for _, p in ipairs(tModel:GetDescendants()) do
-                        if p:IsA("BasePart") then ignoredParts[p] = true end
-                    end
-                    for _, p in ipairs(Char:GetDescendants()) do
-                        if p:IsA("BasePart") then ignoredParts[p] = true end
-                    end
-
-                    -- Capture door hinge reference before ejecting
-                    local DoorHinge = tModel:FindFirstChild("PaintParts")
-                        and tModel.PaintParts:FindFirstChild("DoorLeft")
-                        and tModel.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
-
-                    -- ── Scan cargo BEFORE moving anything ─────────────────────
-                    -- We capture cargo positions while the truck is still at the
-                    -- giver's base so the bounding-box check is accurate.
-                    local cargoToMove = {}
-                    for _, part in ipairs(workspace:GetDescendants()) do
-                        if part:IsA("BasePart") and not ignoredParts[part] then
-                            if part.Name == "Main" or part.Name == "WoodSection" then
-                                -- Skip parts that are welded to a different parent model
-                                if part:FindFirstChild("Weld") and part.Weld.Part1 and part.Weld.Part1.Parent ~= part.Parent then continue end
-                                local capturedCF = part.CFrame
-                                if isPointInside(capturedCF.Position, mCF, mSz) then
-                                    local nP   = capturedCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                                    local tOff = CFrame.new(nP) * capturedCF.Rotation
-                                    table.insert(cargoToMove, { part = part, tOff = tOff })
+                        for _, part in ipairs(workspace:GetDescendants()) do
+                            if part:IsA("BasePart") and not ignoredParts[part] then
+                                if part.Name == "Main" or part.Name == "WoodSection" then
+                                    if part:FindFirstChild("Weld") and part.Weld.Part1.Parent ~= part.Parent then continue end
+                                    task.spawn(function()
+                                        if isPointInside(part.Position, mCF, mSz) then
+                                            TeleportTruck()
+                                            local PCF  = part.CFrame
+                                            local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                                            local tOff = CFrame.new(nP) * PCF.Rotation
+                                            part.CFrame = tOff
+                                            task.wait(0.3)
+                                            -- record where it actually landed after the attempt
+                                            table.insert(teleportedParts, {
+                                                Instance     = part,
+                                                OldPos       = part.Position,
+                                                TargetCFrame = tOff,
+                                            })
+                                        end
+                                    end)
                                 end
                             end
                         end
-                    end
 
-                    -- ── Eject safely (do NOT destroy the seat) ────────────────
-                    Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    task.wait(0.05)
-                    -- Remove the seat weld without destroying the seat part itself
-                    local seatWeld = Char.HumanoidRootPart:FindFirstChild("SeatWeld")
-                        or Char.HumanoidRootPart:FindFirstChildWhichIsA("Weld")
-                    if seatWeld then seatWeld:Destroy() end
-                    -- Also clear via the seat's own method if still attached
-                    if Char.Humanoid.SeatPart then
-                        pcall(function() Char.Humanoid.SeatPart:Sit(nil) end)
-                    end
-
-                    -- Wait until the humanoid is confirmed unseated (up to 2 s)
-                    local ejectWait = 0
-                    while Char.Humanoid.SeatPart and ejectWait < 2 do
-                        task.wait(0.05)
-                        ejectWait += 0.05
-                    end
-
-                    -- Close the door
-                    if DoorHinge then
-                        for i = 1, 10 do
-                            pcall(function() RS.Interaction.RemoteProxy:FireServer(DoorHinge) end)
+                        local SitPart   = Char.Humanoid.SeatPart
+                        local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
+                            and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
+                            and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
+                        task.wait()
+                        Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                        task.wait(0.1); SitPart:Destroy(); TeleportTruck(); DidTruckTeleport = false; task.wait(0.1)
+                        if DoorHinge then
+                            for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
                         end
+                        truckDone += 1; setProgTrucks(truckDone, truckCount)
                     end
-
-                    task.wait(0.1)
-
-                    -- ── Teleport the truck body ────────────────────────────────
-                    -- Guard: ensure tModel is still valid after the eject sequence
-                    if tModel and tModel.Parent then
-                        local truckMain = tModel:FindFirstChild("Main")
-                        if truckMain then
-                            local nPos = truckMain.CFrame.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
-                            local targetCF = CFrame.new(nPos) * truckMain.CFrame.Rotation
-                            -- Use SetPrimaryPartCFrame only if PrimaryPart is set; fall back to moving Main directly
-                            if tModel.PrimaryPart then
-                                pcall(function() tModel:SetPrimaryPartCFrame(targetCF) end)
-                            else
-                                tModel.PrimaryPart = truckMain
-                                pcall(function() tModel:SetPrimaryPartCFrame(targetCF) end)
-                                tModel.PrimaryPart = nil
-                            end
-                        end
-                    end
-                    DidTruckTeleport = false
-
-                    task.wait(0.1)
-
-                    for _, cargo in ipairs(cargoToMove) do
-                        pendingSpawns += 1
-                        task.spawn(function()
-                            cargo.part.CFrame = cargo.tOff
-                            task.wait(0.3)
-                            table.insert(teleportedParts, {
-                                Instance     = cargo.part,
-                                TargetCFrame = cargo.tOff,
-                            })
-                            pendingSpawns -= 1
-                        end)
-                    end
-                    truckDone += 1; setProgTrucks(truckDone, truckCount)
                 end
 
-                -- Phase 2: wait until every cargo task.spawn has finished inserting,
-                -- then retry any pieces that didn't land at their TargetCFrame.
-                setStatus("Waiting for cargo scans to finish...", true)
-                local waitedFor = 0
-                while pendingSpawns > 0 and butterRunning and waitedFor < 15 do
-                    task.wait(0.2)
-                    waitedFor += 0.2
-                end
+
+                -- Phase 2: retry any cargo that didn't reach TargetCFrame, up to 25 times
+                -- "Missed" = current position is more than 8 studs from where we wanted it
+                -- We warp directly to each item (wherever it is) to grab it
+                task.wait(2) -- give task.spawns time to finish recording
 
                 local cargoTotal = #teleportedParts
                 local cargoDone  = 0
 
                 if cargoTotal > 0 then
+                    progTrucks.Visible = true
+                    setProgTrucks(0, cargoTotal)
+
                     local MAX_TRIES = 25
                     local attempt   = 0
-
-                    -- A piece is "missed" if it's more than 8 studs from its target
-                    -- AND more than 120 studs from the receiver origin.
-                    local recOriginPos = ReceiverBaseOrigin.Position
 
                     local function getMissed()
                         local missed = {}
                         for _, data in ipairs(teleportedParts) do
-                            local item = data.Instance
-                            if not (item and item.Parent) then continue end
-                            if (item.Position - data.TargetCFrame.Position).Magnitude <= 8 then continue end
-                            if (item.Position - recOriginPos).Magnitude <= 120 then continue end
-                            table.insert(missed, data)
+                            if data.Instance and data.Instance.Parent then
+                                local dist = (data.Instance.Position - data.TargetCFrame.Position).Magnitude
+                                if dist > 8 then
+                                    table.insert(missed, data)
+                                end
+                            end
                         end
                         return missed
                     end
 
                     local missedList = getMissed()
 
-                    -- Only enter the retry loop if there are actually missed pieces.
-                    -- Show the progress bar based on missed count only, not total cargo.
-                    if #missedList > 0 then
-                        progTrucks.Visible = true
-                        local missedTotal = #missedList
-                        setProgTrucks(0, missedTotal)
+                    while #missedList > 0 and VH.butter.running and attempt < MAX_TRIES do
+                        attempt += 1
+                        setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
 
-                        while #missedList > 0 and butterRunning and attempt < MAX_TRIES do
-                            attempt += 1
-                            setStatus(string.format("Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
+                        for _, data in ipairs(missedList) do
+                            if not VH.butter.running then break end
+                            local item = data.Instance
+                            if not (item and item.Parent) then continue end
 
-                            for _, data in ipairs(missedList) do
-                                if not butterRunning then break end
-                                local item = data.Instance
-                                if not (item and item.Parent) then continue end
-
-                                -- Warp to wherever the item actually is right now
-                                local tries = 0
-                                while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
-                                    Char.HumanoidRootPart.CFrame = item.CFrame
-                                    task.wait(0.1)
-                                    tries += 1
-                                end
-
-                                -- Hammer ClientIsDragging to gain network ownership
-                                for i = 1, 50 do
-                                    task.wait(0.05)
-                                    RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-                                end
-                                item.CFrame = data.TargetCFrame
-                                task.wait(0.5)
-                                -- One more nudge in case physics bounced it
-                                item.CFrame = data.TargetCFrame
-                                task.wait(0.2)
+                            -- Warp directly to the item (it could be anywhere — giver OR receiver side)
+                            local tries = 0
+                            while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
+                                Char.HumanoidRootPart.CFrame = item.CFrame
+                                task.wait(0.1)
+                                tries += 1
                             end
 
-                            task.wait(1)
-                            missedList = getMissed()
-                            cargoDone  = missedTotal - #missedList
-                            setProgTrucks(cargoDone, missedTotal)
-                        end
-
-                        if #missedList == 0 then
-                            setProgTrucks(missedTotal, missedTotal)
-                            setStatus("✓ All cargo teleported!", true)
-                        else
-                            setStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
+                            RS.Interaction.ClientIsDragging:FireServer(item.Parent)
+                            task.wait(0.6)
+                            item.CFrame = data.TargetCFrame
+                            task.wait(0.2)
+                            cargoDone += 1
+                            setProgTrucks(cargoDone, cargoTotal)
                         end
 
                         task.wait(1)
-                    else
-                        setStatus("✓ All cargo teleported!", true)
+                        missedList = getMissed()
+                        cargoDone  = cargoTotal - #missedList
+                        setProgTrucks(cargoDone, cargoTotal)
                     end
+
+                    if #missedList == 0 then
+                        setStatus("✓ All cargo teleported!", true)
+                    else
+                        setStatus(string.format("Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
+                    end
+
+                    setProgTrucks(cargoTotal, cargoTotal)
+                    task.wait(1)
                 end
             end
         end
@@ -998,6 +882,7 @@ end)
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- SINGLE TRUCK TELEPORT
+-- Sit inside a truck, fill in Giver + Receiver, then hit "Teleport Truck".
 -- ══════════════════════════════════════════════════════════════════════════════
 
 makeSep(dupePage)
@@ -1006,6 +891,7 @@ makeLabel(dupePage, "Single Truck Teleport")
 local _, getTruckGiverName    = makeDupeDropdown("Giver",    dupePage)
 local _, getTruckReceiverName = makeDupeDropdown("Receiver", dupePage)
 
+-- Status bar for the truck-teleport section
 local truckStatusBar = Instance.new("Frame", dupePage)
 truckStatusBar.Size = UDim2.new(1, -12, 0, 28)
 truckStatusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24); truckStatusBar.BorderSizePixel = 0
@@ -1107,6 +993,7 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
             DidTruckTeleport = true
         end
 
+        -- Phase 1: sit in the truck, scan + teleport cargo, then eject
         truckProgBar.Visible = true
         setTruckProg(0, 1)
 
@@ -1158,7 +1045,8 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
         end
         setTruckProg(1, 1)
 
-        task.wait(2)
+        -- Phase 2: retry missed cargo up to 25 times
+        task.wait(2) -- give task.spawns time to finish recording
 
         local cargoTotal = #teleportedParts
         local cargoDone  = 0
@@ -1231,238 +1119,5 @@ makeBtn(dupePage, "Teleport Truck", Color3.fromRGB(55, 55, 65), function()
         stopTruckBtn.Visible = false
     end)
 end)
-
--- ════════════════════════════════════════════════════════════════════════════════
--- WORLD TAB
--- ════════════════════════════════════════════════════════════════════════════════
-local worldPage = VH.pages["WorldTab"]
-
-if not worldPage then
-    warn("[VanillaHub] Vanilla2: WorldTab page not found.")
-else
-
-local Lighting   = game:GetService("Lighting")
-local RunService = game:GetService("RunService")
-
--- ── Shared helpers (scoped to World tab) ─────────────────────────────────────
-local function wMakeLabel(parent, text)
-    local lbl = Instance.new("TextLabel", parent)
-    lbl.Size = UDim2.new(1, -12, 0, 22)
-    lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 11
-    lbl.TextColor3 = Color3.fromRGB(120, 120, 150)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Text = string.upper(text)
-    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0, 4)
-    return lbl
-end
-
-local function wMakeSep(parent)
-    local f = Instance.new("Frame", parent)
-    f.Size = UDim2.new(1, -12, 0, 1)
-    f.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
-    f.BorderSizePixel = 0
-    return f
-end
-
-local function wMakeToggle(parent, text, default, callback)
-    local frame = Instance.new("Frame", parent)
-    frame.Size = UDim2.new(1, -12, 0, 32)
-    frame.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-    frame.BorderSizePixel = 0
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(1, -50, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.GothamSemibold
-    lbl.TextSize = 13
-    lbl.TextColor3 = THEME_TEXT
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Text = text
-    local tb = Instance.new("TextButton", frame)
-    tb.Size = UDim2.new(0, 34, 0, 18)
-    tb.Position = UDim2.new(1, -44, 0.5, -9)
-    tb.BackgroundColor3 = default and Color3.fromRGB(60, 180, 60) or BTN_COLOR
-    tb.Text = ""; tb.BorderSizePixel = 0; tb.AutoButtonColor = false
-    Instance.new("UICorner", tb).CornerRadius = UDim.new(1, 0)
-    local knob = Instance.new("Frame", tb)
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.Position = UDim2.new(0, default and 18 or 2, 0.5, -7)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    knob.BorderSizePixel = 0
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-    local toggled = default
-    if callback then callback(toggled) end
-    tb.MouseButton1Click:Connect(function()
-        toggled = not toggled
-        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = toggled and Color3.fromRGB(60, 180, 60) or BTN_COLOR
-        }):Play()
-        TweenService:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
-        }):Play()
-        if callback then callback(toggled) end
-    end)
-    return frame, tb, knob  -- return tb & knob so we can force-update the visual externally
-end
-
--- ── Snapshot original Lighting values ────────────────────────────────────────
-local origClockTime = Lighting.ClockTime
-local origFogEnd    = Lighting.FogEnd
-local origFogStart  = Lighting.FogStart
-local origFogColor  = Lighting.FogColor
-local origShadows   = Lighting.GlobalShadows
-
--- ── Connections ──────────────────────────────────────────────────────────────
-local dayConn   = nil
-local nightConn = nil
-local fogConn   = nil
-
-local function stopDayNight()
-    if dayConn   then dayConn:Disconnect();   dayConn   = nil end
-    if nightConn then nightConn:Disconnect(); nightConn = nil end
-end
-
--- ── ENVIRONMENT ───────────────────────────────────────────────────────────────
-wMakeLabel(worldPage, "Environment")
-
--- Always Day — auto-enables on load after 1 second
-local alwaysDayFrame, alwaysDayTb, alwaysDayKnob = wMakeToggle(worldPage, "Always Day", false, function(v)
-    if v then
-        stopDayNight()
-        Lighting.ClockTime = 14
-        dayConn = RunService.Heartbeat:Connect(function()
-            Lighting.ClockTime = 14
-        end)
-    else
-        if dayConn then dayConn:Disconnect(); dayConn = nil end
-        Lighting.ClockTime = origClockTime
-    end
-end)
-
--- Auto-enable Always Day 1 second after the script loads
-task.delay(1, function()
-    stopDayNight()
-    Lighting.ClockTime = 14
-    dayConn = RunService.Heartbeat:Connect(function()
-        Lighting.ClockTime = 14
-    end)
-    -- Update the toggle visuals to reflect the ON state
-    if alwaysDayTb and alwaysDayKnob then
-        TweenService:Create(alwaysDayTb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = Color3.fromRGB(60, 180, 60)
-        }):Play()
-        TweenService:Create(alwaysDayKnob, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            Position = UDim2.new(0, 18, 0.5, -7)
-        }):Play()
-    end
-end)
-
--- Always Night (mutually exclusive with Always Day)
-wMakeToggle(worldPage, "Always Night", false, function(v)
-    if v then
-        stopDayNight()
-        Lighting.ClockTime = 0
-        nightConn = RunService.Heartbeat:Connect(function()
-            Lighting.ClockTime = 0
-        end)
-    else
-        if nightConn then nightConn:Disconnect(); nightConn = nil end
-        Lighting.ClockTime = origClockTime
-    end
-end)
-
--- Remove Fog — Heartbeat-enforced so the server can't reset it
-wMakeToggle(worldPage, "Remove Fog", false, function(v)
-    if fogConn then fogConn:Disconnect(); fogConn = nil end
-    if v then
-        Lighting.FogEnd   = 1e9
-        Lighting.FogStart = 1e9
-        fogConn = RunService.Heartbeat:Connect(function()
-            Lighting.FogEnd   = 1e9
-            Lighting.FogStart = 1e9
-        end)
-    else
-        Lighting.FogEnd   = origFogEnd
-        Lighting.FogStart = origFogStart
-        Lighting.FogColor = origFogColor
-    end
-end)
-
--- Shadows — ON = shadows enabled, OFF = shadows disabled (matches Vanilla1 convention)
-wMakeToggle(worldPage, "Shadows", true, function(v)
-    Lighting.GlobalShadows = v
-end)
-
--- Cleanup for all Lighting connections
-table.insert(VH.cleanupTasks, function()
-    stopDayNight()
-    if fogConn then fogConn:Disconnect(); fogConn = nil end
-    Lighting.ClockTime     = origClockTime
-    Lighting.FogEnd        = origFogEnd
-    Lighting.FogStart      = origFogStart
-    Lighting.FogColor      = origFogColor
-    Lighting.GlobalShadows = origShadows
-end)
-
--- ── WATER ─────────────────────────────────────────────────────────────────────
-wMakeSep(worldPage)
-wMakeLabel(worldPage, "Water")
-
--- Walk On Water — spawns invisible solid planes over every Part named "Water"
-local walkOnWaterConn  = nil
-local walkOnWaterParts = {}
-
-local function removeWalkWater()
-    if walkOnWaterConn then walkOnWaterConn:Disconnect(); walkOnWaterConn = nil end
-    for _, p in ipairs(walkOnWaterParts) do
-        if p and p.Parent then p:Destroy() end
-    end
-    walkOnWaterParts = {}
-end
-
-wMakeToggle(worldPage, "Walk On Water", false, function(v)
-    removeWalkWater()
-    if v then
-        local function makeSolid(part)
-            if part:IsA("Part") and part.Name == "Water" then
-                local clone = Instance.new("Part")
-                clone.Size         = part.Size
-                clone.CFrame       = part.CFrame
-                clone.Anchored     = true
-                clone.CanCollide   = true
-                clone.Transparency = 1
-                clone.Name         = "WalkWaterPlane"
-                clone.Parent       = workspace
-                table.insert(walkOnWaterParts, clone)
-            end
-        end
-        for _, p in ipairs(workspace:GetDescendants()) do makeSolid(p) end
-        walkOnWaterConn = workspace.DescendantAdded:Connect(makeSolid)
-    end
-end)
-
-table.insert(VH.cleanupTasks, removeWalkWater)
-
--- Remove Water — makes all Parts named "Water" invisible / visible
-wMakeToggle(worldPage, "Remove Water", false, function(v)
-    -- Notify Vanilla1's setRemovedWater hook if present
-    if _G.VH and _G.VH.setRemovedWater then _G.VH.setRemovedWater(v) end
-    for _, p in ipairs(workspace:GetDescendants()) do
-        if p:IsA("Part") and p.Name == "Water" then
-            p.Transparency = v and 1 or 0.5
-            p.CanCollide   = false
-        end
-    end
-end)
-
--- ── WORLD section (reserved) ──────────────────────────────────────────────────
-wMakeSep(worldPage)
-wMakeLabel(worldPage, "World")
--- (reserved for future features)
-
-end -- worldPage guard
 
 print("[VanillaHub] Vanilla2 loaded — Butter Leak ready in Dupe tab")
