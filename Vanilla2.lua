@@ -70,48 +70,42 @@ local function createWorldToggle(text, defaultState, callback)
     return frame
 end
 
-local worldClockConn    = nil
-local alwaysDayActive   = false
-local alwaysNightActive = false
+local dayConn   = nil
+local nightConn = nil
 
-table.insert(cleanupTasks, function()
-    if worldClockConn then worldClockConn:Disconnect(); worldClockConn = nil end
-    alwaysDayActive   = false
-    alwaysNightActive = false
-end)
+local function stopDayNight()
+    if dayConn   then dayConn:Disconnect();   dayConn   = nil end
+    if nightConn then nightConn:Disconnect(); nightConn = nil end
+end
+
+table.insert(cleanupTasks, stopDayNight)
 
 createWSectionLabel("Environment")
 
 local alwaysDayToggleFrame = createWorldToggle("Always Day", false, function(v)
-    alwaysDayActive = v
-    if worldClockConn then worldClockConn:Disconnect(); worldClockConn = nil end
+    stopDayNight()
     if v then
-        alwaysNightActive = false
-        local Lighting = game:GetService("Lighting")
-        Lighting.ClockTime = 14
-        worldClockConn = game:GetService("RunService").Heartbeat:Connect(function()
-            Lighting.ClockTime = 14
+        local L = game:GetService("Lighting")
+        L.ClockTime = 14
+        dayConn = game:GetService("RunService").Heartbeat:Connect(function()
+            L.ClockTime = 14
         end)
     end
 end)
 
--- Auto-click Always Day 2 seconds after load
+-- Auto-enable Always Day 2 seconds after load
 task.delay(2, function()
     local tb = alwaysDayToggleFrame:FindFirstChildOfClass("TextButton")
-    if tb then tb:GetPropertyChangedSignal("BackgroundColor3") -- ensure UI is ready
-        tb.MouseButton1Click:Fire()
-    end
+    if tb then tb.MouseButton1Click:Fire() end
 end)
 
 createWorldToggle("Always Night", false, function(v)
-    alwaysNightActive = v
-    if worldClockConn then worldClockConn:Disconnect(); worldClockConn = nil end
+    stopDayNight()
     if v then
-        alwaysDayActive = false
-        local Lighting = game:GetService("Lighting")
-        Lighting.ClockTime = 0
-        worldClockConn = game:GetService("RunService").Heartbeat:Connect(function()
-            Lighting.ClockTime = 0
+        local L = game:GetService("Lighting")
+        L.ClockTime = 0
+        nightConn = game:GetService("RunService").Heartbeat:Connect(function()
+            L.ClockTime = 0
         end)
     end
 end)
