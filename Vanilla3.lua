@@ -118,6 +118,16 @@ local lockStroke = Instance.new("UIStroke", lockCircle)
 lockStroke.Color     = CS_DIM
 lockStroke.Thickness = 1.5
 
+local lockIcon = Instance.new("TextLabel", lockCircle)
+lockIcon.Size                   = UDim2.new(1, 0, 1, 0)
+lockIcon.BackgroundTransparency = 1
+lockIcon.Text                   = "🪵"
+lockIcon.Font                   = Enum.Font.GothamBold
+lockIcon.TextSize               = 20
+lockIcon.TextXAlignment         = Enum.TextXAlignment.Center
+lockIcon.TextYAlignment         = Enum.TextYAlignment.Center
+lockIcon.ZIndex                 = 4
+
 -- Title
 local csTitleLbl = Instance.new("TextLabel", csOuter)
 csTitleLbl.Size                   = UDim2.new(1, -16, 0, 24)
