@@ -858,37 +858,58 @@ local function forceSave()
         return
     end
 
-    -- Save main slot data (items, wood, structures, money, blueprints)
-    pcall(function()
-        RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
-    end)
+    local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        print("[VH] No character found!")
+        return
+    end
 
-    -- Save all vehicles/trucks on the plot separately
+    local originCF = hrp.CFrame
+
+    -- Step 1: Claim network ownership of every vehicle by teleporting to it
+    -- and spam-firing ClientIsDragging so the server registers we own it
     for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
         if v:FindFirstChild("Owner") and v.Owner.Value == LP then
             local typeVal = v:FindFirstChild("Type")
             if typeVal and typeVal.Value == "Vehicle" then
-                pcall(function()
-                    RS.Interaction.ClientInteracted:FireServer(v, "Save vehicle")
-                end)
-                pcall(function()
-                    RS.VehicleSave:FireServer(v)
-                end)
+                local root = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
+                if root then
+                    -- Teleport next to vehicle
+                    hrp.CFrame = root.CFrame * CFrame.new(4, 1, 0)
+                    task.wait(0.05)
+
+                    -- Spam drag to force network ownership transfer
+                    local t = tick()
+                    repeat
+                        pcall(function()
+                            RS.Interaction.ClientIsDragging:FireServer(v)
+                            RS.Interaction.ClientIsDragging:FireServer(v)
+                            RS.Interaction.ClientIsDragging:FireServer(v)
+                        end)
+                        task.wait(0.03)
+                    until (tick() - t > 1.5) or (root.ReceiveAge == 0)
+
+                    task.wait(0.1)
+                end
             end
         end
     end
 
-    -- Save all structures/furniture on the plot
-    for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
-        if v:FindFirstChild("Owner") and v.Owner.Value == LP then
-            local typeVal = v:FindFirstChild("Type")
-            if typeVal and (typeVal.Value == "Structure" or typeVal.Value == "Furniture") then
-                pcall(function()
-                    RS.Interaction.ClientInteracted:FireServer(v, "Save")
-                end)
-            end
-        end
-    end
+    -- Step 2: Return player to origin
+    hrp.CFrame = originCF
+    task.wait(0.1)
+
+    -- Step 3: Fire the main save — now that we own all vehicles,
+    -- the server will include them in the save data
+    pcall(function()
+        RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
+    end)
+
+    -- Step 4: Fire save a second time after a short delay as a safety net
+    task.wait(0.4)
+    pcall(function()
+        RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
+    end)
 
     print("[VH] Force saved slot " .. tostring(slot))
     showSavePopup()
