@@ -794,6 +794,18 @@ local function loadSlot(slot)
     end)
 end
 
+local function forceSave()
+    local slot = LP:FindFirstChild("CurrentSaveSlot") and LP.CurrentSaveSlot.Value
+    if not slot or slot == -1 then
+        print("[VH] No slot currently loaded!")
+        return
+    end
+    pcall(function()
+        RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
+    end)
+    print("[VH] Force saved slot " .. tostring(slot))
+end
+
 local function sellSoldSign()
     for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
         if v:FindFirstChild("Owner") and v.Owner.Value == LP
@@ -813,7 +825,8 @@ end
 
 sectionLabel(sl, "Fast Load")
 makeSlider(sl, "Slot Number", 1, 6, 1, function(v) slotNum = v end)
-makeButton(sl, "Load Base", function() loadSlot(slotNum) end)
+makeButton(sl, "Load Base",                   function() loadSlot(slotNum) end)
+makeButton(sl, "💾  Force Save (current slot)", function() forceSave() end)
 
 sep(sl)
 sectionLabel(sl, "Land Management")
