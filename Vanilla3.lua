@@ -50,12 +50,12 @@ local function corner(p, r)
 end
 
 -- ════════════════════════════════════════════════════
--- WOOD TAB — COMING SOON CARD
+-- WOOD TAB — COMING SOON CARD (frame + circle only)
 -- ════════════════════════════════════════════════════
 
 local woodPage = pages["WoodTab"]
 
--- Outer card
+-- Outer card frame
 local csCard = Instance.new("Frame", woodPage)
 csCard.Size               = UDim2.new(0, 260, 0, 200)
 csCard.Position           = UDim2.new(0.5, -130, 0.5, -100)
@@ -85,174 +85,54 @@ task.spawn(function()
     end
 end)
 
--- Grid lines horizontal
-for _, top in ipairs({22, 68, 114, 160}) do
-    local gh = Instance.new("Frame", csCard)
-    gh.Size             = UDim2.new(1, 0, 0, 1)
-    gh.Position         = UDim2.new(0, 0, 0, top)
-    gh.BackgroundColor3 = Color3.fromRGB(32, 28, 35)
-    gh.BorderSizePixel  = 0
-    gh.ZIndex           = 2
-end
-
--- Grid lines vertical
-for _, left in ipairs({28, 72, 116, 160, 204, 248}) do
-    local gv = Instance.new("Frame", csCard)
-    gv.Size             = UDim2.new(0, 1, 1, 0)
-    gv.Position         = UDim2.new(0, left, 0, 0)
-    gv.BackgroundColor3 = Color3.fromRGB(32, 28, 35)
-    gv.BorderSizePixel  = 0
-    gv.ZIndex           = 2
-end
-
--- Glow blob
+-- Glow blob behind circle
 local glowBlob = Instance.new("Frame", csCard)
 glowBlob.Size                   = UDim2.new(0, 80, 0, 80)
-glowBlob.Position               = UDim2.new(0.5, -40, 0, 12)
+glowBlob.Position               = UDim2.new(0.5, -40, 0, 52)
 glowBlob.BackgroundColor3       = Color3.fromRGB(100, 80, 110)
-glowBlob.BackgroundTransparency = 1 - 0.32
+glowBlob.BackgroundTransparency = 0.68
 glowBlob.BorderSizePixel        = 0
-glowBlob.ZIndex                 = 3
+glowBlob.ZIndex                 = 2
 corner(glowBlob, 40)
 
 task.spawn(function()
     while glowBlob and glowBlob.Parent do
         TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -40, 0, 20)
+            Position = UDim2.new(0.5, -40, 0, 60)
         }):Play()
         task.wait(1.4)
         TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -40, 0, 12)
+            Position = UDim2.new(0.5, -40, 0, 52)
         }):Play()
         task.wait(1.4)
     end
 end)
 
--- Icon circle
-local lockCircle = Instance.new("Frame", csCard)
-lockCircle.Size             = UDim2.new(0, 46, 0, 46)
-lockCircle.Position         = UDim2.new(0.5, -23, 0, 22)
-lockCircle.BackgroundColor3 = Color3.fromRGB(22, 19, 25)
-lockCircle.BorderSizePixel  = 0
-lockCircle.ZIndex           = 4
-corner(lockCircle, 23)
+-- Floating circle (no text, no emoji)
+local floatCircle = Instance.new("Frame", csCard)
+floatCircle.Size             = UDim2.new(0, 46, 0, 46)
+floatCircle.Position         = UDim2.new(0.5, -23, 0, 62)
+floatCircle.BackgroundColor3 = Color3.fromRGB(22, 19, 25)
+floatCircle.BorderSizePixel  = 0
+floatCircle.ZIndex           = 3
+corner(floatCircle, 23)
 
-local lockStroke = Instance.new("UIStroke", lockCircle)
-lockStroke.Color     = Color3.fromRGB(160, 138, 157)
-lockStroke.Thickness = 1.5
-
-local lockIcon = Instance.new("TextLabel", lockCircle)
-lockIcon.Size                   = UDim2.new(1, 0, 1, 0)
-lockIcon.BackgroundTransparency = 1
-lockIcon.Text                   = "🪵"
-lockIcon.TextScaled             = true
-lockIcon.Font                   = Enum.Font.GothamBold
-lockIcon.ZIndex                 = 5
+local circleStroke = Instance.new("UIStroke", floatCircle)
+circleStroke.Color     = Color3.fromRGB(160, 138, 157)
+circleStroke.Thickness = 1.5
 
 task.spawn(function()
-    while lockCircle and lockCircle.Parent do
-        TweenService:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -23, 0, 30)
+    while floatCircle and floatCircle.Parent do
+        TweenService:Create(floatCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, -23, 0, 70)
         }):Play()
         task.wait(1.4)
-        TweenService:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -23, 0, 22)
+        TweenService:Create(floatCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, -23, 0, 62)
         }):Play()
         task.wait(1.4)
     end
 end)
-
--- Title
-local csTitle = Instance.new("TextLabel", csCard)
-csTitle.Size                   = UDim2.new(1, -16, 0, 20)
-csTitle.Position               = UDim2.new(0, 8, 0, 78)
-csTitle.BackgroundTransparency = 1
-csTitle.Text                   = "COMING SOON"
-csTitle.Font                   = Enum.Font.GothamBold
-csTitle.TextSize               = 17
-csTitle.TextColor3             = Color3.fromRGB(230, 206, 226)
-csTitle.TextXAlignment         = Enum.TextXAlignment.Center
-csTitle.ZIndex                 = 6
-
--- Accent line
-local accentLine = Instance.new("Frame", csCard)
-accentLine.Size             = UDim2.new(0, 56, 0, 2)
-accentLine.Position         = UDim2.new(0.5, -28, 0, 105)
-accentLine.BackgroundColor3 = Color3.fromRGB(160, 138, 157)
-accentLine.BorderSizePixel  = 0
-accentLine.ZIndex           = 6
-corner(accentLine, 1)
-
--- Subtitle
-local csSub = Instance.new("TextLabel", csCard)
-csSub.Size                   = UDim2.new(1, -20, 0, 16)
-csSub.Position               = UDim2.new(0, 10, 0, 112)
-csSub.BackgroundTransparency = 1
-csSub.Text                   = "WOOD TAB — UNDER DEVELOPMENT"
-csSub.Font                   = Enum.Font.GothamSemibold
-csSub.TextSize               = 10
-csSub.TextColor3             = Color3.fromRGB(90, 76, 88)
-csSub.TextXAlignment         = Enum.TextXAlignment.Center
-csSub.ZIndex                 = 6
-
--- Description
-local csDesc = Instance.new("TextLabel", csCard)
-csDesc.Size                   = UDim2.new(1, -24, 0, 36)
-csDesc.Position               = UDim2.new(0, 12, 0, 130)
-csDesc.BackgroundTransparency = 1
-csDesc.Text                   = "Being rebuilt with improved tree cutting,\nsmarter log dragging & reliable sell logic."
-csDesc.Font                   = Enum.Font.Gotham
-csDesc.TextSize               = 10
-csDesc.TextColor3             = Color3.fromRGB(90, 76, 88)
-csDesc.TextXAlignment         = Enum.TextXAlignment.Center
-csDesc.TextWrapped            = true
-csDesc.ZIndex                 = 6
-
--- Status pill
-local pillBG = Instance.new("Frame", csCard)
-pillBG.Size             = UDim2.new(0, 148, 0, 20)
-pillBG.Position         = UDim2.new(0.5, -74, 0, 172)
-pillBG.BackgroundColor3 = Color3.fromRGB(22, 19, 25)
-pillBG.BorderSizePixel  = 0
-pillBG.ZIndex           = 6
-corner(pillBG, 10)
-
-local pillStroke = Instance.new("UIStroke", pillBG)
-pillStroke.Color        = Color3.fromRGB(90, 76, 88)
-pillStroke.Thickness    = 1
-pillStroke.Transparency = 0.4
-
-local pulseDot = Instance.new("Frame", pillBG)
-pulseDot.Size             = UDim2.new(0, 6, 0, 6)
-pulseDot.Position         = UDim2.new(0, 10, 0.5, -3)
-pulseDot.BackgroundColor3 = Color3.fromRGB(230, 206, 226)
-pulseDot.BorderSizePixel  = 0
-pulseDot.ZIndex           = 7
-corner(pulseDot, 3)
-
-task.spawn(function()
-    while pulseDot and pulseDot.Parent do
-        TweenService:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            BackgroundTransparency = 0.75
-        }):Play()
-        task.wait(0.9)
-        TweenService:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            BackgroundTransparency = 0
-        }):Play()
-        task.wait(0.9)
-    end
-end)
-
-local pillLbl = Instance.new("TextLabel", pillBG)
-pillLbl.Size                   = UDim2.new(1, -26, 1, 0)
-pillLbl.Position               = UDim2.new(0, 22, 0, 0)
-pillLbl.BackgroundTransparency = 1
-pillLbl.Text                   = "In Development  •  v0.0"
-pillLbl.Font                   = Enum.Font.GothamSemibold
-pillLbl.TextSize               = 10
-pillLbl.TextColor3             = Color3.fromRGB(160, 138, 157)
-pillLbl.TextXAlignment         = Enum.TextXAlignment.Left
-pillLbl.ZIndex                 = 7
 
 -- ════════════════════════════════════════════════════
 -- SETTINGS TAB
