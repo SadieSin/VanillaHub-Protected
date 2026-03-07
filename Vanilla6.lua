@@ -794,16 +794,104 @@ local function loadSlot(slot)
     end)
 end
 
+local function showSavePopup()
+    local CoreGui = game:GetService("CoreGui")
+    local existing = CoreGui:FindFirstChild("VH_SavePopup")
+    if existing then existing:Destroy() end
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "VH_SavePopup"
+    sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
+    sg.Parent = CoreGui
+
+    local frame = Instance.new("Frame", sg)
+    frame.Size = UDim2.new(0, 240, 0, 48)
+    frame.AnchorPoint = Vector2.new(0.5, 0)
+    frame.Position = UDim2.new(0.5, 0, 0, -60)
+    frame.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+    frame.BorderSizePixel = 0
+    corner(frame, 10)
+    local stroke = Instance.new("UIStroke", frame)
+    stroke.Color = Color3.fromRGB(60, 200, 80)
+    stroke.Thickness = 1.5
+
+    local icon = Instance.new("TextLabel", frame)
+    icon.Size = UDim2.new(0, 36, 1, 0)
+    icon.Position = UDim2.new(0, 8, 0, 0)
+    icon.BackgroundTransparency = 1
+    icon.Font = Enum.Font.GothamBold
+    icon.TextSize = 20
+    icon.TextColor3 = Color3.fromRGB(60, 200, 80)
+    icon.Text = "💾"
+
+    local lbl = Instance.new("TextLabel", frame)
+    lbl.Size = UDim2.new(1, -52, 1, 0)
+    lbl.Position = UDim2.new(0, 48, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = 14
+    lbl.TextColor3 = Color3.fromRGB(200, 255, 210)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = "Saved Successfully!"
+
+    -- Slide in
+    TS:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0, 18)
+    }):Play()
+
+    -- Slide out and destroy after 2.5s
+    task.delay(2.5, function()
+        TS:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, 0, 0, -60)
+        }):Play()
+        task.wait(0.35)
+        pcall(function() sg:Destroy() end)
+    end)
+end
+
 local function forceSave()
     local slot = LP:FindFirstChild("CurrentSaveSlot") and LP.CurrentSaveSlot.Value
     if not slot or slot == -1 then
         print("[VH] No slot currently loaded!")
         return
     end
+
+    -- Save main slot data (items, wood, structures, money, blueprints)
     pcall(function()
         RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
     end)
+
+    -- Save all vehicles/trucks on the plot separately
+    for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
+        if v:FindFirstChild("Owner") and v.Owner.Value == LP then
+            local typeVal = v:FindFirstChild("Type")
+            if typeVal and typeVal.Value == "Vehicle" then
+                pcall(function()
+                    RS.Interaction.ClientInteracted:FireServer(v, "Save vehicle")
+                end)
+                pcall(function()
+                    RS.VehicleSave:FireServer(v)
+                end)
+            end
+        end
+    end
+
+    -- Save all structures/furniture on the plot
+    for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
+        if v:FindFirstChild("Owner") and v.Owner.Value == LP then
+            local typeVal = v:FindFirstChild("Type")
+            if typeVal and (typeVal.Value == "Structure" or typeVal.Value == "Furniture") then
+                pcall(function()
+                    RS.Interaction.ClientInteracted:FireServer(v, "Save")
+                end)
+            end
+        end
+    end
+
     print("[VH] Force saved slot " .. tostring(slot))
+    showSavePopup()
 end
 
 local function sellSoldSign()
@@ -826,7 +914,7 @@ end
 sectionLabel(sl, "Fast Load")
 makeSlider(sl, "Slot Number", 1, 6, 1, function(v) slotNum = v end)
 makeButton(sl, "Load Base",                   function() loadSlot(slotNum) end)
-makeButton(sl, "💾  Force Save (current slot)", function() forceSave() end)
+makeButton(sl, "💾  Force Save",               function() forceSave() end)
 
 sep(sl)
 sectionLabel(sl, "Land Management")
