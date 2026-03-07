@@ -866,82 +866,119 @@ local function forceSave()
 
     local originCF = hrp.CFrame
 
-    -- ── Step 1: Individually interact-save every vehicle/truck ──
-    -- LT2 saves vehicles by firing ClientInteracted on the VehicleSeat
-    -- with the "SaveVehicle" prompt. We teleport to each one and fire it.
+    -- Find our plot origin so we can park vehicles on it
+    local plotCF = nil
+    for _, v in ipairs(workspace.Properties:GetChildren()) do
+        if v:FindFirstChild("Owner") and v.Owner.Value == LP
+            and v:FindFirstChild("OriginSquare") then
+            plotCF = v.OriginSquare.CFrame
+            break
+        end
+    end
+
+    if not plotCF then
+        -- No plot found — just do a plain save of what we can
+        pcall(function() RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP) end)
+        showSavePopup()
+        return
+    end
+
+    -- ── Step 1: Move every owned vehicle onto the plot and claim ownership ──
+    -- The LT2 server only saves vehicles whose position is inside the plot bounds.
+    -- We teleport each vehicle to the plot origin, grab network ownership via
+    -- drag-spam, then leave it there while we fire RequestSave.
+    local vehicleOriginalCFrames = {}
+
     for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
         if v:FindFirstChild("Owner") and v.Owner.Value == LP then
             local typeVal = v:FindFirstChild("Type")
             if typeVal and typeVal.Value == "Vehicle" then
-
-                -- Find the VehicleSeat or any seat inside the vehicle
-                local seat = v:FindFirstChildOfClass("VehicleSeat")
-                    or v:FindFirstChildWhichIsA("Seat")
-                local root = v.PrimaryPart
-                    or (seat)
-                    or v:FindFirstChildWhichIsA("BasePart")
-
+                local root = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
                 if root then
-                    -- Teleport next to it so server accepts the interaction
+                    -- Remember original position so we can restore after
+                    vehicleOriginalCFrames[v] = root.CFrame
+
+                    -- Teleport player next to vehicle first
                     hrp.CFrame = root.CFrame * CFrame.new(5, 1, 0)
-                    task.wait(0.2)
+                    task.wait(0.1)
 
-                    -- Fire every known vehicle save interaction string LT2 uses
-                    pcall(function() RS.Interaction.ClientInteracted:FireServer(v, "SaveVehicle") end)
-                    pcall(function() RS.Interaction.ClientInteracted:FireServer(v, "Save Vehicle") end)
-                    pcall(function() RS.Interaction.ClientInteracted:FireServer(v, "Save") end)
-                    if seat then
-                        pcall(function() RS.Interaction.ClientInteracted:FireServer(seat, "SaveVehicle") end)
-                        pcall(function() RS.Interaction.ClientInteracted:FireServer(seat, "Save Vehicle") end)
-                        pcall(function() RS.Interaction.ClientInteracted:FireServer(seat, "Save") end)
-                    end
-
-                    -- Also drag-spam to force network ownership so server trusts us
+                    -- Grab network ownership
                     local t = tick()
                     repeat
                         pcall(function()
                             RS.Interaction.ClientIsDragging:FireServer(v)
                             RS.Interaction.ClientIsDragging:FireServer(v)
+                            RS.Interaction.ClientIsDragging:FireServer(v)
                         end)
-                        task.wait(0.04)
-                    until (tick() - t > 1) or (root.ReceiveAge == 0)
+                        task.wait(0.03)
+                    until (tick() - t > 2) or (root.ReceiveAge == 0)
 
-                    task.wait(0.1)
+                    -- Move vehicle onto plot (offset each one slightly so they don't stack)
+                    local idx = 0
+                    for _ in pairs(vehicleOriginalCFrames) do idx = idx + 1 end
+                    local offset = Vector3.new((idx - 1) * 8, 2, 0)
+
+                    pcall(function()
+                        RS.Interaction.ClientIsDragging:FireServer(v)
+                        if v.PrimaryPart then
+                            v:SetPrimaryPartCFrame(plotCF + offset)
+                        else
+                            root.CFrame = plotCF + offset
+                        end
+                    end)
+
+                    -- Hold it there briefly
+                    for _ = 1, 10 do
+                        pcall(function()
+                            RS.Interaction.ClientIsDragging:FireServer(v)
+                            if v.PrimaryPart then
+                                v:SetPrimaryPartCFrame(plotCF + offset)
+                            else
+                                root.CFrame = plotCF + offset
+                            end
+                        end)
+                        task.wait(0.05)
+                    end
                 end
             end
         end
     end
 
-    -- ── Step 2: Save all structures and furniture individually ──
-    for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
-        if v:FindFirstChild("Owner") and v.Owner.Value == LP then
-            local typeVal = v:FindFirstChild("Type")
-            if typeVal and (typeVal.Value == "Structure" or typeVal.Value == "Furniture") then
-                local root = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
-                if root then
-                    hrp.CFrame = root.CFrame * CFrame.new(5, 1, 0)
-                    task.wait(0.05)
-                    pcall(function() RS.Interaction.ClientInteracted:FireServer(v, "Save") end)
-                    task.wait(0.05)
-                end
-            end
-        end
-    end
+    -- ── Step 2: Teleport player to plot and fire RequestSave ──
+    hrp.CFrame = plotCF + Vector3.new(0, 3, 0)
+    task.wait(0.2)
 
-    -- ── Step 3: Return player home ──
-    hrp.CFrame = originCF
-    task.wait(0.15)
-
-    -- ── Step 4: Fire the main slot save (covers items, wood, money, blueprints, land) ──
     pcall(function()
         RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
     end)
 
-    -- ── Step 5: Second save fire after delay to catch anything that settled late ──
     task.wait(0.5)
+
+    -- Fire again as safety net
     pcall(function()
         RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
     end)
+
+    task.wait(0.3)
+
+    -- ── Step 3: Move vehicles back to their original positions ──
+    for v, originalCF in pairs(vehicleOriginalCFrames) do
+        local root = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
+        if root and v.Parent then
+            pcall(function()
+                RS.Interaction.ClientIsDragging:FireServer(v)
+                if v.PrimaryPart then
+                    v:SetPrimaryPartCFrame(originalCF)
+                else
+                    root.CFrame = originalCF
+                end
+            end)
+            task.wait(0.05)
+        end
+    end
+
+    -- ── Step 4: Return player home ──
+    hrp.CFrame = originCF
 
     print("[VH] Force saved slot " .. tostring(slot))
     showSavePopup()
