@@ -119,11 +119,12 @@ lockStroke.Color     = CS_DIM
 lockStroke.Thickness = 1.5
 
 local lockIcon = Instance.new("TextLabel", lockCircle)
-lockIcon.Size                   = UDim2.new(1, 0, 1, 0)
+lockIcon.Size                   = UDim2.new(1, -6, 1, -6)
+lockIcon.Position               = UDim2.new(0, 3, 0, 3)
 lockIcon.BackgroundTransparency = 1
-lockIcon.Text                   = "🪓"
-lockIcon.Font                   = Enum.Font.GothamBold
-lockIcon.TextSize               = 20
+lockIcon.Text                   = "🪵"
+lockIcon.Font                   = Enum.Font.Legacy
+lockIcon.TextScaled             = true
 lockIcon.TextXAlignment         = Enum.TextXAlignment.Center
 lockIcon.TextYAlignment         = Enum.TextYAlignment.Center
 lockIcon.ZIndex                 = 4
