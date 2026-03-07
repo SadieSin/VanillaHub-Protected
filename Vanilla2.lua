@@ -93,6 +93,7 @@ local function makeToggle(parent, text, default, callback)
         }):Play()
         if callback then callback(toggled) end
     end)
+    -- Return frame + getter (for dupePage usage) AND tb/knob refs (for worldPage auto-enable)
     return frame, function() return toggled end, tb, knob
 end
 
@@ -116,6 +117,7 @@ local function makeBtn(parent, text, color, callback)
     btn.MouseButton1Click:Connect(callback)
     return btn
 end
+
 
 local function makeProgressBar(parent, labelText)
     local wrap = Instance.new("Frame", parent)
@@ -672,6 +674,7 @@ runBtn.MouseButton1Click:Connect(function()
                 setStatus("Sending trucks...", true)
                 local truckDone = 0
 
+                -- Phase 1: teleport all trucks
                 for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
                     if not butterRunning then break end
                     if v.Name == "Owner" and tostring(v.Value) == giverName and v.Parent:FindFirstChild("DriveSeat") then
@@ -752,6 +755,7 @@ runBtn.MouseButton1Click:Connect(function()
                     progTrucks.Visible = true
                     setProgTrucks(0, #missedList)
                     local missedTotal = #missedList
+
                     local itemsDone = 0
 
                     while #missedList > 0 and VH.butter.running and attempt < MAX_TRIES do
@@ -761,6 +765,7 @@ runBtn.MouseButton1Click:Connect(function()
                         for _, data in ipairs(missedList) do
                             if not VH.butter.running then break end
                             local item = data.Instance
+
                             if not (item and item.Parent) then continue end
 
                             local tries = 0
@@ -1039,6 +1044,7 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
             if p:IsA("BasePart") then ignoredParts[p] = true end
         end
 
+        -- Scan all workspace parts for cargo inside the truck's bounding box
         for _, part in ipairs(workspace:GetDescendants()) do
             if not singleTruckRunning then break end
             if part:IsA("BasePart") and not ignoredParts[part] then
@@ -1067,6 +1073,7 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
             end
         end
 
+        -- Eject, destroy seat, close door, re-teleport truck
         local SitPart   = Char.Humanoid.SeatPart
         local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
             and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
@@ -1083,8 +1090,9 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
         end
         setTruckProg(1, 1)
 
-        task.wait(2)
+        task.wait(2) -- give task.spawns time to finish recording
 
+        -- ── Cargo retry loop (up to 25 attempts) ──────────────────────────────
         local function getMissed()
             local missed = {}
             for _, data in ipairs(teleportedParts) do
@@ -1172,88 +1180,174 @@ table.insert(VH.cleanupTasks, function()
 end)
 
 -- ════════════════════════════════════════════════════════════════════════════════
--- HALF-LOAD GRID TELEPORT
+-- BATCH TRUCK TELEPORT (Dupe Tab — teleport a specific number of truck loads)
 -- ════════════════════════════════════════════════════════════════════════════════
 
 makeSep(dupePage)
-makeLabel(dupePage, "Half-Load Grid Teleport")
+makeLabel(dupePage, "Batch Truck Teleport")
 
-local halfLoadInfoLbl = Instance.new("TextLabel", dupePage)
-halfLoadInfoLbl.Size               = UDim2.new(1, -12, 0, 32)
-halfLoadInfoLbl.BackgroundColor3   = Color3.fromRGB(20, 20, 30)
-halfLoadInfoLbl.BorderSizePixel    = 0
-halfLoadInfoLbl.Font               = Enum.Font.Gotham
-halfLoadInfoLbl.TextSize           = 11
-halfLoadInfoLbl.TextColor3         = Color3.fromRGB(130, 130, 160)
-halfLoadInfoLbl.TextXAlignment     = Enum.TextXAlignment.Left
-halfLoadInfoLbl.TextWrapped        = true
-halfLoadInfoLbl.Text               = "Teleports half of the giver's trucks in a grid (17/row, 3-stud spacing). Cargo retry runs after."
-Instance.new("UICorner", halfLoadInfoLbl).CornerRadius = UDim.new(0, 6)
-local halfInfoPad = Instance.new("UIPadding", halfLoadInfoLbl)
-halfInfoPad.PaddingLeft   = UDim.new(0, 8)
-halfInfoPad.PaddingRight  = UDim.new(0, 8)
-halfInfoPad.PaddingTop    = UDim.new(0, 4)
-halfInfoPad.PaddingBottom = UDim.new(0, 4)
+local _, getBatchGiverName    = makeDupeDropdown("Giver",    dupePage)
+local _, getBatchReceiverName = makeDupeDropdown("Receiver", dupePage)
 
-local _, getHalfGiverName    = makeDupeDropdown("Giver",    dupePage)
-local _, getHalfReceiverName = makeDupeDropdown("Receiver", dupePage)
+-- ── Amount input row ──────────────────────────────────────────────────────────
+local amountRow = Instance.new("Frame", dupePage)
+amountRow.Size             = UDim2.new(1, -12, 0, 36)
+amountRow.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+amountRow.BorderSizePixel  = 0
+Instance.new("UICorner", amountRow).CornerRadius = UDim.new(0, 8)
+local amountStroke = Instance.new("UIStroke", amountRow)
+amountStroke.Color        = Color3.fromRGB(60, 60, 90)
+amountStroke.Thickness    = 1
+amountStroke.Transparency = 0.5
 
-local halfStatusBar = Instance.new("Frame", dupePage)
-halfStatusBar.Size             = UDim2.new(1, -12, 0, 28)
-halfStatusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-halfStatusBar.BorderSizePixel  = 0
-Instance.new("UICorner", halfStatusBar).CornerRadius = UDim.new(0, 6)
-Instance.new("UIStroke", halfStatusBar).Color = Color3.fromRGB(50, 50, 70)
+local amountCaption = Instance.new("TextLabel", amountRow)
+amountCaption.Size               = UDim2.new(0, 120, 1, 0)
+amountCaption.Position           = UDim2.new(0, 12, 0, 0)
+amountCaption.BackgroundTransparency = 1
+amountCaption.Font               = Enum.Font.GothamBold
+amountCaption.TextSize           = 12
+amountCaption.TextColor3         = THEME_TEXT
+amountCaption.TextXAlignment     = Enum.TextXAlignment.Left
+amountCaption.Text               = "Trucks to send:"
 
-local halfStatusDot = Instance.new("Frame", halfStatusBar)
-halfStatusDot.Size             = UDim2.new(0, 8, 0, 8)
-halfStatusDot.Position         = UDim2.new(0, 10, 0.5, -4)
-halfStatusDot.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-halfStatusDot.BorderSizePixel  = 0
-Instance.new("UICorner", halfStatusDot).CornerRadius = UDim.new(1, 0)
+-- Minus button
+local minusBtn = Instance.new("TextButton", amountRow)
+minusBtn.Size             = UDim2.new(0, 26, 0, 22)
+minusBtn.Position         = UDim2.new(1, -92, 0.5, -11)
+minusBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 30)
+minusBtn.BorderSizePixel  = 0
+minusBtn.Font             = Enum.Font.GothamBold
+minusBtn.TextSize         = 16
+minusBtn.TextColor3       = THEME_TEXT
+minusBtn.Text             = "−"
+minusBtn.AutoButtonColor  = false
+Instance.new("UICorner", minusBtn).CornerRadius = UDim.new(0, 5)
 
-local halfStatusLbl = Instance.new("TextLabel", halfStatusBar)
-halfStatusLbl.Size                   = UDim2.new(1, -28, 1, 0)
-halfStatusLbl.Position               = UDim2.new(0, 26, 0, 0)
-halfStatusLbl.BackgroundTransparency = 1
-halfStatusLbl.Font                   = Enum.Font.Gotham
-halfStatusLbl.TextSize               = 12
-halfStatusLbl.TextColor3             = Color3.fromRGB(160, 155, 175)
-halfStatusLbl.TextXAlignment         = Enum.TextXAlignment.Left
-halfStatusLbl.Text                   = "Ready"
+-- Amount display / editable box
+local amountBox = Instance.new("TextBox", amountRow)
+amountBox.Size               = UDim2.new(0, 42, 0, 22)
+amountBox.Position           = UDim2.new(1, -62, 0.5, -11)
+amountBox.BackgroundColor3   = Color3.fromRGB(30, 30, 42)
+amountBox.BorderSizePixel    = 0
+amountBox.Font               = Enum.Font.GothamBold
+amountBox.TextSize           = 13
+amountBox.TextColor3         = THEME_TEXT
+amountBox.Text               = "1"
+amountBox.TextXAlignment     = Enum.TextXAlignment.Center
+amountBox.ClearTextOnFocus   = false
+Instance.new("UICorner", amountBox).CornerRadius = UDim.new(0, 5)
 
-local function setHalfStatus(msg, active)
-    halfStatusLbl.Text = msg
-    TweenService:Create(halfStatusDot, TweenInfo.new(0.2), {
+-- Plus button
+local plusBtn = Instance.new("TextButton", amountRow)
+plusBtn.Size             = UDim2.new(0, 26, 0, 22)
+plusBtn.Position         = UDim2.new(1, -32, 0.5, -11)
+plusBtn.BackgroundColor3 = Color3.fromRGB(30, 55, 30)
+plusBtn.BorderSizePixel  = 0
+plusBtn.Font             = Enum.Font.GothamBold
+plusBtn.TextSize         = 16
+plusBtn.TextColor3       = THEME_TEXT
+plusBtn.Text             = "+"
+plusBtn.AutoButtonColor  = false
+Instance.new("UICorner", plusBtn).CornerRadius = UDim.new(0, 5)
+
+local batchAmount = 1
+
+local function clampBatchAmount(n)
+    batchAmount = math.max(1, math.floor(tonumber(n) or 1))
+    amountBox.Text = tostring(batchAmount)
+end
+
+minusBtn.MouseButton1Click:Connect(function() clampBatchAmount(batchAmount - 1) end)
+plusBtn.MouseButton1Click:Connect(function()  clampBatchAmount(batchAmount + 1) end)
+amountBox.FocusLost:Connect(function() clampBatchAmount(amountBox.Text) end)
+
+-- ── Status bar ────────────────────────────────────────────────────────────────
+local batchStatusBar = Instance.new("Frame", dupePage)
+batchStatusBar.Size             = UDim2.new(1, -12, 0, 28)
+batchStatusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+batchStatusBar.BorderSizePixel  = 0
+Instance.new("UICorner", batchStatusBar).CornerRadius = UDim.new(0, 6)
+Instance.new("UIStroke", batchStatusBar).Color = Color3.fromRGB(50, 50, 70)
+
+local batchStatusDot = Instance.new("Frame", batchStatusBar)
+batchStatusDot.Size             = UDim2.new(0, 8, 0, 8)
+batchStatusDot.Position         = UDim2.new(0, 10, 0.5, -4)
+batchStatusDot.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
+batchStatusDot.BorderSizePixel  = 0
+Instance.new("UICorner", batchStatusDot).CornerRadius = UDim.new(1, 0)
+
+local batchStatusLbl = Instance.new("TextLabel", batchStatusBar)
+batchStatusLbl.Size                   = UDim2.new(1, -28, 1, 0)
+batchStatusLbl.Position               = UDim2.new(0, 26, 0, 0)
+batchStatusLbl.BackgroundTransparency = 1
+batchStatusLbl.Font                   = Enum.Font.Gotham
+batchStatusLbl.TextSize               = 12
+batchStatusLbl.TextColor3             = Color3.fromRGB(160, 155, 175)
+batchStatusLbl.TextXAlignment         = Enum.TextXAlignment.Left
+batchStatusLbl.Text                   = "Ready"
+
+local function setBatchStatus(msg, active)
+    batchStatusLbl.Text = msg
+    TweenService:Create(batchStatusDot, TweenInfo.new(0.2), {
         BackgroundColor3 = active
             and Color3.fromRGB(80, 200, 100)
             or  Color3.fromRGB(100, 100, 120)
     }):Play()
 end
 
-local halfTruckProgBar, setHalfTruckProg, resetHalfTruckProg = makeProgressBar(dupePage, "Trucks Placed")
-local halfCargoProgBar, setHalfCargoProg, resetHalfCargoProg = makeProgressBar(dupePage, "Cargo Retry")
+-- ── Progress bars ─────────────────────────────────────────────────────────────
+local batchTruckProgBar, setBatchTruckProg, resetBatchTruckProg = makeProgressBar(dupePage, "Trucks")
+local batchCargoProgBar, setBatchCargoProg, resetBatchCargoProg = makeProgressBar(dupePage, "Cargo")
 
-local halfRunning = false
-local halfThread  = nil
+-- ── Control buttons ───────────────────────────────────────────────────────────
+local batchRunning = false
+local batchThread  = nil
 
-local stopHalfBtn = makeBtn(dupePage, "■  Stop Grid Teleport", Color3.fromRGB(65, 25, 25), function()
-    halfRunning = false
-    if halfThread then pcall(task.cancel, halfThread); halfThread = nil end
-    setHalfStatus("Stopped", false)
-    resetHalfTruckProg()
-    resetHalfCargoProg()
-    stopHalfBtn.Visible = false
+local stopBatchBtn = makeBtn(dupePage, "■  Stop Batch", Color3.fromRGB(65, 25, 25), function()
+    batchRunning = false
+    if batchThread then pcall(task.cancel, batchThread); batchThread = nil end
+    setBatchStatus("Stopped", false)
+    resetBatchTruckProg()
+    resetBatchCargoProg()
+    stopBatchBtn.Visible = false
 end)
-stopHalfBtn.Visible = false
+stopBatchBtn.Visible = false
 
-makeBtn(dupePage, "▶  Run Half-Load Grid Teleport", Color3.fromRGB(45, 35, 70), function()
-    if halfRunning then setHalfStatus("Already running!", true) return end
+makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), function()
+    if batchRunning then setBatchStatus("Already running!", true) return end
 
-    local gName = getHalfGiverName()
-    local rName = getHalfReceiverName()
+    local gName = getBatchGiverName()
+    local rName = getBatchReceiverName()
     if gName == "" or rName == "" then
-        setHalfStatus("⚠ Select both players!", false) return
+        setBatchStatus("⚠ Select both players!", false) return
+    end
+
+    local LP   = Players.LocalPlayer
+    local Char = LP.Character
+    if not Char then setBatchStatus("No character found!", false) return end
+
+    -- Count trucks on the giver's plot
+    local availableTrucks = {}
+    for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
+        if v.Name == "Owner" and tostring(v.Value) == gName and v.Parent:FindFirstChild("DriveSeat") then
+            table.insert(availableTrucks, v.Parent)
+        end
+    end
+    local truckCount = #availableTrucks
+
+    -- Validate requested amount vs available
+    if truckCount == 0 then
+        setBatchStatus("⚠ No trucks found on giver's plot!", false) return
+    end
+
+    if batchAmount > truckCount then
+        setBatchStatus(string.format("⚠ Requested %d trucks but only %d available!", batchAmount, truckCount), false)
+        return
+    end
+
+    if batchAmount < truckCount then
+        -- Informational notice — still allowed to proceed
+        setBatchStatus(string.format("ℹ Sending %d of %d available trucks...", batchAmount, truckCount), true)
     end
 
     local GiveBaseOrigin, ReceiverBaseOrigin
@@ -1265,42 +1359,17 @@ makeBtn(dupePage, "▶  Run Half-Load Grid Teleport", Color3.fromRGB(45, 35, 70)
         end
     end
 
-    if not GiveBaseOrigin     then setHalfStatus("⚠ Giver base not found!",    false) return end
-    if not ReceiverBaseOrigin then setHalfStatus("⚠ Receiver base not found!", false) return end
+    if not GiveBaseOrigin     then setBatchStatus("⚠ Giver base not found!",    false) return end
+    if not ReceiverBaseOrigin then setBatchStatus("⚠ Receiver base not found!", false) return end
 
-    local allTrucks = {}
-    for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-        if v.Name == "Owner" and tostring(v.Value) == gName and v.Parent:FindFirstChild("DriveSeat") then
-            table.insert(allTrucks, v.Parent)
-        end
-    end
+    batchRunning         = true
+    stopBatchBtn.Visible = true
+    resetBatchTruckProg()
+    resetBatchCargoProg()
+    setBatchStatus(string.format("Teleporting %d truck(s)...", batchAmount), true)
 
-    local totalTrucks = #allTrucks
-    if totalTrucks == 0 then
-        setHalfStatus("⚠ No trucks found on giver's plot!", false) return
-    end
-
-    local halfCount = math.floor(totalTrucks / 2)
-    if halfCount == 0 then
-        setHalfStatus(string.format("⚠ Only %d truck(s) found — need at least 2.", totalTrucks), false) return
-    end
-
-    setHalfStatus(string.format("Found %d trucks — teleporting %d (half)...", totalTrucks, halfCount), true)
-
-    halfRunning          = true
-    stopHalfBtn.Visible  = true
-    resetHalfTruckProg()
-    resetHalfCargoProg()
-
-    halfThread = task.spawn(function()
-        local RS   = game:GetService("ReplicatedStorage")
-        local LP   = Players.LocalPlayer
-        local Char = LP.Character or LP.CharacterAdded:Wait()
-
-        local TRUCKS_PER_ROW = 17
-        local GAP_STUDS      = 3
-        local truckWidth     = nil
-        local truckDepth     = nil
+    batchThread = task.spawn(function()
+        local RS = game:GetService("ReplicatedStorage")
 
         local function isPointInside(point, boxCFrame, boxSize)
             local r = boxCFrame:PointToObjectSpace(point)
@@ -1309,45 +1378,67 @@ makeBtn(dupePage, "▶  Run Half-Load Grid Teleport", Color3.fromRGB(45, 35, 70)
                and math.abs(r.Z) <= boxSize.Z / 2
         end
 
-        halfTruckProgBar.Visible = true
-        setHalfTruckProg(0, halfCount)
+        local allTeleportedParts = {}  -- cargo records across all trucks
+        local trucksDone         = 0
 
-        local trucksToMove = {}
-        for i = 1, halfCount do
-            trucksToMove[i] = allTrucks[i]
+        batchTruckProgBar.Visible = true
+        setBatchTruckProg(0, batchAmount)
+
+        -- Re-collect trucks at run-time (list might have changed since button press)
+        local truckQueue = {}
+        for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
+            if v.Name == "Owner" and tostring(v.Value) == gName and v.Parent:FindFirstChild("DriveSeat") then
+                table.insert(truckQueue, v.Parent)
+                if #truckQueue >= batchAmount then break end
+            end
         end
 
-        local teleportedParts = {}
-        local placedCount     = 0
+        -- ── Per-truck loop ────────────────────────────────────────────────────
+        for _, truckModel in ipairs(truckQueue) do
+            if not batchRunning then break end
 
-        for idx, truckModel in ipairs(trucksToMove) do
-            if not halfRunning then break end
+            -- Guard: truck might have disappeared
+            if not (truckModel and truckModel.Parent) then
+                setBatchStatus(string.format(
+                    "⚠ Truck %d/%d vanished, skipping...", trucksDone + 1, batchAmount), true)
+                trucksDone += 1
+                setBatchTruckProg(trucksDone, batchAmount)
+                continue
+            end
+
+            setBatchStatus(string.format(
+                "Truck %d / %d — sitting in...", trucksDone + 1, batchAmount), true)
+
+            local ignoredParts     = {}
+            local DidTruckTeleport = false
+
+            local function TeleportThisTruck()
+                if DidTruckTeleport then return end
+                if not Char.Humanoid.SeatPart then return end
+                local TCF  = Char.Humanoid.SeatPart.Parent:FindFirstChild("Main").CFrame
+                local nPos = TCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(CFrame.new(nPos) * TCF.Rotation)
+                DidTruckTeleport = true
+            end
 
             truckModel.DriveSeat:Sit(Char.Humanoid)
-            repeat task.wait() truckModel.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
+            local waitIter = 0
+            repeat
+                task.wait()
+                truckModel.DriveSeat:Sit(Char.Humanoid)
+                waitIter += 1
+            until Char.Humanoid.SeatPart or waitIter > 100
+
+            if not Char.Humanoid.SeatPart then
+                setBatchStatus(string.format(
+                    "⚠ Could not sit in truck %d/%d, skipping...", trucksDone + 1, batchAmount), true)
+                trucksDone += 1
+                setBatchTruckProg(trucksDone, batchAmount)
+                continue
+            end
 
             local mCF, mSz = truckModel:GetBoundingBox()
 
-            if not truckWidth then
-                truckWidth = mSz.X
-                truckDepth = mSz.Z
-            end
-
-            local i0        = idx - 1
-            local col       = i0 % TRUCKS_PER_ROW
-            local row       = math.floor(i0 / TRUCKS_PER_ROW)
-            local offsetX   = col * (truckWidth  + GAP_STUDS)
-            local offsetZ   = row * (truckDepth  + GAP_STUDS)
-
-            local gridOrigin = ReceiverBaseOrigin.Position
-            local targetPos  = Vector3.new(
-                gridOrigin.X + offsetX,
-                gridOrigin.Y,
-                gridOrigin.Z + offsetZ
-            )
-            local targetCF = CFrame.new(targetPos)
-
-            local ignoredParts = {}
             for _, p in ipairs(truckModel:GetDescendants()) do
                 if p:IsA("BasePart") then ignoredParts[p] = true end
             end
@@ -1355,16 +1446,9 @@ makeBtn(dupePage, "▶  Run Half-Load Grid Teleport", Color3.fromRGB(45, 35, 70)
                 if p:IsA("BasePart") then ignoredParts[p] = true end
             end
 
-            local DidTruckTeleport = false
-            local function TeleportTruckToGrid()
-                if DidTruckTeleport then return end
-                if not Char.Humanoid.SeatPart then return end
-                Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(targetCF)
-                DidTruckTeleport = true
-            end
-
+            -- Scan for cargo inside this truck's bounding box
             for _, part in ipairs(workspace:GetDescendants()) do
-                if not halfRunning then break end
+                if not batchRunning then break end
                 if part:IsA("BasePart") and not ignoredParts[part] then
                     if part.Name == "Main" or part.Name == "WoodSection" then
                         if part:FindFirstChild("Weld")
@@ -1374,16 +1458,13 @@ makeBtn(dupePage, "▶  Run Half-Load Grid Teleport", Color3.fromRGB(45, 35, 70)
                         end
                         task.spawn(function()
                             if isPointInside(part.Position, mCF, mSz) then
-                                TeleportTruckToGrid()
+                                TeleportThisTruck()
                                 local PCF  = part.CFrame
-                                local nP   = PCF.Position - GiveBaseOrigin.Position + targetPos
-                                local relOffset = mCF:PointToObjectSpace(PCF.Position)
-                                local tOff = CFrame.new(
-                                    targetPos + Vector3.new(relOffset.X, relOffset.Y, relOffset.Z)
-                                ) * PCF.Rotation
+                                local nP   = PCF.Position - GiveBaseOrigin.Position + ReceiverBaseOrigin.Position
+                                local tOff = CFrame.new(nP) * PCF.Rotation
                                 part.CFrame = tOff
                                 task.wait(0.3)
-                                table.insert(teleportedParts, {
+                                table.insert(allTeleportedParts, {
                                     Instance     = part,
                                     OldPos       = part.Position,
                                     TargetCFrame = tOff,
@@ -1402,434 +1483,28 @@ makeBtn(dupePage, "▶  Run Half-Load Grid Teleport", Color3.fromRGB(45, 35, 70)
             Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             task.wait(0.1)
             SitPart:Destroy()
-            TeleportTruckToGrid()
+            TeleportThisTruck()
             DidTruckTeleport = false
             task.wait(0.1)
             if DoorHinge then
                 for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
             end
 
-            placedCount += 1
-            setHalfTruckProg(placedCount, halfCount)
-            setHalfStatus(string.format(
-                "Placed %d / %d trucks (row %d, col %d)...",
-                placedCount, halfCount,
-                math.floor((idx-1) / TRUCKS_PER_ROW) + 1,
-                ((idx-1) % TRUCKS_PER_ROW) + 1
-            ), true)
+            trucksDone += 1
+            setBatchTruckProg(trucksDone, batchAmount)
+            task.wait(0.3) -- brief pause between trucks
         end
 
-        setHalfTruckProg(halfCount, halfCount)
+        setBatchTruckProg(batchAmount, batchAmount)
+        setBatchStatus(string.format("✓ %d truck(s) sent — checking cargo...", trucksDone), true)
 
+        -- Give all task.spawns time to record their cargo
         task.wait(2)
 
+        -- ── Cargo retry loop ──────────────────────────────────────────────────
         local function getMissed()
             local missed = {}
-            for _, data in ipairs(teleportedParts) do
-                if data.Instance and data.Instance.Parent then
-                    if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
-                        local distFromGiver = (data.Instance.Position - GiveBaseOrigin.Position).Magnitude
-                        if distFromGiver < 500 then
-                            table.insert(missed, data)
-                        end
-                    end
-                end
-            end
-            return missed
-        end
-
-        local missedList  = getMissed()
-        local MAX_TRIES   = 25
-        local attempt     = 0
-
-        if #missedList > 0 then
-            halfCargoProgBar.Visible = true
-            setHalfCargoProg(0, #missedList)
-            local missedTotal = #missedList
-            local itemsDone   = 0
-
-            while #missedList > 0 and halfRunning and attempt < MAX_TRIES do
-                attempt += 1
-                setHalfStatus(string.format(
-                    "Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
-
-                for _, data in ipairs(missedList) do
-                    if not halfRunning then break end
-                    local item = data.Instance
-                    if not (item and item.Parent) then continue end
-
-                    local tries = 0
-                    while (Char.HumanoidRootPart.Position - item.Position).Magnitude > 25 and tries < 15 do
-                        Char.HumanoidRootPart.CFrame = item.CFrame
-                        task.wait(0.1)
-                        tries += 1
-                    end
-
-                    RS.Interaction.ClientIsDragging:FireServer(item.Parent)
-                    task.wait(0.6)
-                    item.CFrame = data.TargetCFrame
-                    task.wait(0.3)
-
-                    itemsDone += 1
-                    setHalfCargoProg(itemsDone, missedTotal)
-                    task.wait()
-                end
-
-                task.wait(1)
-                missedList = getMissed()
-                local confirmed = missedTotal - #missedList
-                if confirmed > itemsDone then
-                    itemsDone = confirmed
-                    setHalfCargoProg(itemsDone, missedTotal)
-                end
-            end
-
-            if #missedList == 0 then
-                setHalfStatus(string.format("✓ Done! %d trucks placed, all cargo teleported.", halfCount), false)
-            else
-                setHalfStatus(string.format("Done — %d trucks placed, %d cargo part(s) missed after %d tries.",
-                    halfCount, #missedList, MAX_TRIES), false)
-            end
-
-            setHalfCargoProg(missedTotal, missedTotal)
-        else
-            setHalfStatus(string.format("✓ Done! %d / %d trucks placed in grid. No cargo missed.", halfCount, totalTrucks), false)
-        end
-
-        task.wait(1)
-        halfRunning          = false
-        halfThread           = nil
-        stopHalfBtn.Visible  = false
-    end)
-end)
-
--- Cleanup for half-load grid thread
-table.insert(VH.cleanupTasks, function()
-    halfRunning = false
-    if halfThread then pcall(task.cancel, halfThread); halfThread = nil end
-end)
-
--- ════════════════════════════════════════════════════════════════════════════════
--- CUSTOM COUNT GRID TELEPORT
--- Enter exactly how many trucks to teleport. Validates against actual truck count.
--- Places trucks in a grid: 17 per row, 3-stud gap between each truck/row.
--- Grid grows left→right, then wraps to next row 3 studs below.
--- Trucks face their original orientation (no sideways rotation).
--- Cargo retry runs after all trucks are placed.
--- ════════════════════════════════════════════════════════════════════════════════
-
-makeSep(dupePage)
-makeLabel(dupePage, "Custom Count Grid Teleport")
-
-local customGridInfoLbl = Instance.new("TextLabel", dupePage)
-customGridInfoLbl.Size             = UDim2.new(1, -12, 0, 40)
-customGridInfoLbl.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-customGridInfoLbl.BorderSizePixel  = 0
-customGridInfoLbl.Font             = Enum.Font.Gotham
-customGridInfoLbl.TextSize         = 11
-customGridInfoLbl.TextColor3       = Color3.fromRGB(130, 130, 160)
-customGridInfoLbl.TextXAlignment   = Enum.TextXAlignment.Left
-customGridInfoLbl.TextWrapped      = true
-customGridInfoLbl.Text             = "Enter how many trucks to teleport. They are placed in a grid (17/row, 3-stud spacing), facing forward, left→right then next row down."
-Instance.new("UICorner", customGridInfoLbl).CornerRadius = UDim.new(0, 6)
-local cgInfoPad = Instance.new("UIPadding", customGridInfoLbl)
-cgInfoPad.PaddingLeft   = UDim.new(0, 8)
-cgInfoPad.PaddingRight  = UDim.new(0, 8)
-cgInfoPad.PaddingTop    = UDim.new(0, 5)
-cgInfoPad.PaddingBottom = UDim.new(0, 5)
-
-local _, getCGGiverName    = makeDupeDropdown("Giver",    dupePage)
-local _, getCGReceiverName = makeDupeDropdown("Receiver", dupePage)
-
--- ── Truck count input row ─────────────────────────────────────────────────────
-local inputRow = Instance.new("Frame", dupePage)
-inputRow.Size             = UDim2.new(1, -12, 0, 36)
-inputRow.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
-inputRow.BorderSizePixel  = 0
-Instance.new("UICorner", inputRow).CornerRadius = UDim.new(0, 8)
-local inputRowStroke = Instance.new("UIStroke", inputRow)
-inputRowStroke.Color        = Color3.fromRGB(55, 55, 80)
-inputRowStroke.Thickness    = 1
-inputRowStroke.Transparency = 0.4
-
-local inputRowLbl = Instance.new("TextLabel", inputRow)
-inputRowLbl.Size               = UDim2.new(0, 130, 1, 0)
-inputRowLbl.Position           = UDim2.new(0, 10, 0, 0)
-inputRowLbl.BackgroundTransparency = 1
-inputRowLbl.Font               = Enum.Font.GothamSemibold
-inputRowLbl.TextSize           = 13
-inputRowLbl.TextColor3         = THEME_TEXT
-inputRowLbl.TextXAlignment     = Enum.TextXAlignment.Left
-inputRowLbl.Text               = "Trucks to teleport:"
-
-local inputBox = Instance.new("TextBox", inputRow)
-inputBox.Size             = UDim2.new(0, 80, 0, 24)
-inputBox.Position         = UDim2.new(1, -90, 0.5, -12)
-inputBox.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-inputBox.BorderSizePixel  = 0
-inputBox.Font             = Enum.Font.GothamBold
-inputBox.TextSize         = 14
-inputBox.TextColor3       = THEME_TEXT
-inputBox.PlaceholderText  = "e.g. 34"
-inputBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 110)
-inputBox.Text             = ""
-inputBox.ClearTextOnFocus = false
-inputBox.TextXAlignment   = Enum.TextXAlignment.Center
-Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 6)
-local inputBoxStroke = Instance.new("UIStroke", inputBox)
-inputBoxStroke.Color        = Color3.fromRGB(70, 70, 120)
-inputBoxStroke.Thickness    = 1
-inputBoxStroke.Transparency = 0.3
-
--- Only allow digits
-inputBox:GetPropertyChangedSignal("Text"):Connect(function()
-    local cleaned = inputBox.Text:gsub("%D", "")
-    if cleaned ~= inputBox.Text then inputBox.Text = cleaned end
-end)
-
--- ── Status bar ────────────────────────────────────────────────────────────────
-local cgStatusBar = Instance.new("Frame", dupePage)
-cgStatusBar.Size             = UDim2.new(1, -12, 0, 28)
-cgStatusBar.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-cgStatusBar.BorderSizePixel  = 0
-Instance.new("UICorner", cgStatusBar).CornerRadius = UDim.new(0, 6)
-Instance.new("UIStroke", cgStatusBar).Color = Color3.fromRGB(50, 50, 70)
-
-local cgStatusDot = Instance.new("Frame", cgStatusBar)
-cgStatusDot.Size             = UDim2.new(0, 8, 0, 8)
-cgStatusDot.Position         = UDim2.new(0, 10, 0.5, -4)
-cgStatusDot.BackgroundColor3 = Color3.fromRGB(100, 100, 120)
-cgStatusDot.BorderSizePixel  = 0
-Instance.new("UICorner", cgStatusDot).CornerRadius = UDim.new(1, 0)
-
-local cgStatusLbl = Instance.new("TextLabel", cgStatusBar)
-cgStatusLbl.Size                   = UDim2.new(1, -28, 1, 0)
-cgStatusLbl.Position               = UDim2.new(0, 26, 0, 0)
-cgStatusLbl.BackgroundTransparency = 1
-cgStatusLbl.Font                   = Enum.Font.Gotham
-cgStatusLbl.TextSize               = 12
-cgStatusLbl.TextColor3             = Color3.fromRGB(160, 155, 175)
-cgStatusLbl.TextXAlignment         = Enum.TextXAlignment.Left
-cgStatusLbl.Text                   = "Ready — enter a truck count above"
-
-local function setCGStatus(msg, active, color)
-    cgStatusLbl.Text = msg
-    TweenService:Create(cgStatusDot, TweenInfo.new(0.2), {
-        BackgroundColor3 = color or (active
-            and Color3.fromRGB(80, 200, 100)
-            or  Color3.fromRGB(100, 100, 120))
-    }):Play()
-end
-
--- ── Progress bars ─────────────────────────────────────────────────────────────
-local cgTruckProgBar, setCGTruckProg, resetCGTruckProg = makeProgressBar(dupePage, "Trucks Placed")
-local cgCargoProgBar, setCGCargoProg, resetCGCargoProg = makeProgressBar(dupePage, "Cargo Retry")
-
-local cgRunning = false
-local cgThread  = nil
-
-local stopCGBtn = makeBtn(dupePage, "■  Stop Custom Grid", Color3.fromRGB(65, 25, 25), function()
-    cgRunning = false
-    if cgThread then pcall(task.cancel, cgThread); cgThread = nil end
-    setCGStatus("Stopped", false)
-    resetCGTruckProg()
-    resetCGCargoProg()
-    stopCGBtn.Visible = false
-end)
-stopCGBtn.Visible = false
-
-makeBtn(dupePage, "▶  Run Custom Count Grid Teleport", Color3.fromRGB(35, 45, 70), function()
-    if cgRunning then setCGStatus("Already running!", true) return end
-
-    local gName = getCGGiverName()
-    local rName = getCGReceiverName()
-    if gName == "" or rName == "" then
-        setCGStatus("⚠ Select both players first!", false, Color3.fromRGB(200, 120, 50))
-        return
-    end
-
-    local rawText   = inputBox.Text
-    local wantCount = tonumber(rawText)
-
-    if not wantCount or wantCount <= 0 then
-        setCGStatus("⚠ Enter a valid number of trucks!", false, Color3.fromRGB(200, 120, 50))
-        return
-    end
-    wantCount = math.floor(wantCount)
-
-    local GiveBaseOrigin, ReceiverBaseOrigin
-    for _, v in pairs(workspace.Properties:GetDescendants()) do
-        if v.Name == "Owner" then
-            local val = tostring(v.Value)
-            if val == gName then GiveBaseOrigin     = v.Parent:FindFirstChild("OriginSquare") end
-            if val == rName then ReceiverBaseOrigin = v.Parent:FindFirstChild("OriginSquare") end
-        end
-    end
-    if not GiveBaseOrigin     then setCGStatus("⚠ Giver base not found!",    false, Color3.fromRGB(200, 80, 80)) return end
-    if not ReceiverBaseOrigin then setCGStatus("⚠ Receiver base not found!", false, Color3.fromRGB(200, 80, 80)) return end
-
-    local allTrucks = {}
-    for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-        if v.Name == "Owner" and tostring(v.Value) == gName and v.Parent:FindFirstChild("DriveSeat") then
-            table.insert(allTrucks, v.Parent)
-        end
-    end
-    local totalTrucks = #allTrucks
-
-    if totalTrucks == 0 then
-        setCGStatus("⚠ No trucks found on giver's plot!", false, Color3.fromRGB(200, 80, 80))
-        return
-    end
-    if wantCount > totalTrucks then
-        setCGStatus(
-            string.format("⚠ Only %d truck(s) on plot — you asked for %d. Lower your number!", totalTrucks, wantCount),
-            false, Color3.fromRGB(220, 100, 50))
-        return
-    end
-
-    setCGStatus(string.format(
-        "Found %d trucks total — teleporting %d in grid...", totalTrucks, wantCount), true)
-
-    cgRunning          = true
-    stopCGBtn.Visible  = true
-    resetCGTruckProg()
-    resetCGCargoProg()
-
-    cgThread = task.spawn(function()
-        local RS   = game:GetService("ReplicatedStorage")
-        local LP   = Players.LocalPlayer
-        local Char = LP.Character or LP.CharacterAdded:Wait()
-
-        local TRUCKS_PER_ROW = 17
-        local GAP_STUDS      = 3
-        local truckWidth     = nil
-        local truckDepth     = nil
-
-        local function isPointInside(point, boxCFrame, boxSize)
-            local r = boxCFrame:PointToObjectSpace(point)
-            return math.abs(r.X) <= boxSize.X / 2
-               and math.abs(r.Y) <= boxSize.Y / 2 + 2
-               and math.abs(r.Z) <= boxSize.Z / 2
-        end
-
-        cgTruckProgBar.Visible = true
-        setCGTruckProg(0, wantCount)
-
-        local trucksToMove = {}
-        for i = 1, wantCount do
-            trucksToMove[i] = allTrucks[i]
-        end
-
-        local teleportedParts = {}
-        local placedCount     = 0
-
-        for idx, truckModel in ipairs(trucksToMove) do
-            if not cgRunning then break end
-
-            truckModel.DriveSeat:Sit(Char.Humanoid)
-            repeat task.wait() truckModel.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
-
-            local mCF, mSz = truckModel:GetBoundingBox()
-
-            if not truckWidth then
-                truckWidth = mSz.X
-                truckDepth = mSz.Z
-            end
-
-            local i0  = idx - 1
-            local col = i0 % TRUCKS_PER_ROW
-            local row = math.floor(i0 / TRUCKS_PER_ROW)
-
-            local offsetX = col * (truckWidth  + GAP_STUDS)
-            local offsetZ = row * (truckDepth  + GAP_STUDS)
-
-            local gridOrigin = ReceiverBaseOrigin.Position
-            local targetPos  = Vector3.new(
-                gridOrigin.X + offsetX,
-                gridOrigin.Y,
-                gridOrigin.Z + offsetZ
-            )
-
-            local _, origY, _ = mCF:ToEulerAnglesYXZ()
-            local targetCF    = CFrame.new(targetPos) * CFrame.fromEulerAnglesYXZ(0, origY, 0)
-
-            local ignoredParts = {}
-            for _, p in ipairs(truckModel:GetDescendants()) do
-                if p:IsA("BasePart") then ignoredParts[p] = true end
-            end
-            for _, p in ipairs(Char:GetDescendants()) do
-                if p:IsA("BasePart") then ignoredParts[p] = true end
-            end
-
-            local DidTruckTeleport = false
-            local function TeleportTruckToGrid()
-                if DidTruckTeleport then return end
-                if not Char.Humanoid.SeatPart then return end
-                Char.Humanoid.SeatPart.Parent:SetPrimaryPartCFrame(targetCF)
-                DidTruckTeleport = true
-            end
-
-            for _, part in ipairs(workspace:GetDescendants()) do
-                if not cgRunning then break end
-                if part:IsA("BasePart") and not ignoredParts[part] then
-                    if part.Name == "Main" or part.Name == "WoodSection" then
-                        if part:FindFirstChild("Weld")
-                            and part.Weld.Part1
-                            and part.Weld.Part1.Parent ~= part.Parent then
-                            continue
-                        end
-                        task.spawn(function()
-                            if isPointInside(part.Position, mCF, mSz) then
-                                TeleportTruckToGrid()
-                                local PCF    = part.CFrame
-                                local relPos = mCF:PointToObjectSpace(PCF.Position)
-                                local worldRel = targetCF:PointToWorldSpace(relPos)
-                                local tOff   = CFrame.new(worldRel) * PCF.Rotation
-                                part.CFrame  = tOff
-                                task.wait(0.3)
-                                table.insert(teleportedParts, {
-                                    Instance     = part,
-                                    OldPos       = part.Position,
-                                    TargetCFrame = tOff,
-                                })
-                            end
-                        end)
-                    end
-                end
-            end
-
-            local SitPart   = Char.Humanoid.SeatPart
-            local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
-                and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
-                and SitPart.Parent.PaintParts.DoorLeft:FindFirstChild("ButtonRemote_Hinge")
-            task.wait()
-            Char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            task.wait(0.1)
-            SitPart:Destroy()
-            TeleportTruckToGrid()
-            DidTruckTeleport = false
-            task.wait(0.1)
-            if DoorHinge then
-                for i = 1, 10 do RS.Interaction.RemoteProxy:FireServer(DoorHinge) end
-            end
-
-            placedCount += 1
-            setCGTruckProg(placedCount, wantCount)
-            setCGStatus(string.format(
-                "Placed %d / %d  (row %d, col %d)  —  %d total on plot",
-                placedCount, wantCount,
-                row + 1, col + 1,
-                totalTrucks
-            ), true)
-        end
-
-        setCGTruckProg(wantCount, wantCount)
-
-        task.wait(2)
-
-        local function getMissed()
-            local missed = {}
-            for _, data in ipairs(teleportedParts) do
+            for _, data in ipairs(allTeleportedParts) do
                 if data.Instance and data.Instance.Parent then
                     if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
                         local distFromGiver = (data.Instance.Position - GiveBaseOrigin.Position).Magnitude
@@ -1843,23 +1518,22 @@ makeBtn(dupePage, "▶  Run Custom Count Grid Teleport", Color3.fromRGB(35, 45, 
         end
 
         local missedList = getMissed()
-        local MAX_TRIES  = 25
-        local attempt    = 0
 
         if #missedList > 0 then
-            cgCargoProgBar.Visible = true
-            setCGCargoProg(0, #missedList)
+            batchCargoProgBar.Visible = true
+            setBatchCargoProg(0, #missedList)
             local missedTotal = #missedList
+            local MAX_TRIES   = 25
+            local attempt     = 0
             local itemsDone   = 0
 
-            while #missedList > 0 and cgRunning and attempt < MAX_TRIES do
+            while #missedList > 0 and batchRunning and attempt < MAX_TRIES do
                 attempt += 1
-                setCGStatus(string.format(
-                    "Cargo retry %d/%d — %d part(s) still off-target...",
-                    attempt, MAX_TRIES, #missedList), true)
+                setBatchStatus(string.format(
+                    "Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
 
                 for _, data in ipairs(missedList) do
-                    if not cgRunning then break end
+                    if not batchRunning then break end
                     local item = data.Instance
                     if not (item and item.Parent) then continue end
 
@@ -1876,7 +1550,7 @@ makeBtn(dupePage, "▶  Run Custom Count Grid Teleport", Color3.fromRGB(35, 45, 
                     task.wait(0.3)
 
                     itemsDone += 1
-                    setCGCargoProg(itemsDone, missedTotal)
+                    setBatchCargoProg(itemsDone, missedTotal)
                     task.wait()
                 end
 
@@ -1885,37 +1559,33 @@ makeBtn(dupePage, "▶  Run Custom Count Grid Teleport", Color3.fromRGB(35, 45, 
                 local confirmed = missedTotal - #missedList
                 if confirmed > itemsDone then
                     itemsDone = confirmed
-                    setCGCargoProg(itemsDone, missedTotal)
+                    setBatchCargoProg(itemsDone, missedTotal)
                 end
             end
 
             if #missedList == 0 then
-                setCGStatus(string.format(
-                    "✓ Done! %d / %d trucks placed — all cargo teleported.", wantCount, totalTrucks),
-                    false, Color3.fromRGB(80, 200, 100))
+                setBatchStatus(string.format("✓ Done! %d truck(s) + all cargo sent.", trucksDone), false)
             else
-                setCGStatus(string.format(
-                    "Done — %d trucks placed, %d cargo part(s) missed after %d retries.",
-                    wantCount, #missedList, MAX_TRIES), false, Color3.fromRGB(200, 140, 50))
+                setBatchStatus(string.format(
+                    "Done — gave up after %d tries, %d cargo part(s) missed.", MAX_TRIES, #missedList), false)
             end
 
-            setCGCargoProg(missedTotal, missedTotal)
+            setBatchCargoProg(missedTotal, missedTotal)
         else
-            setCGStatus(string.format(
-                "✓ Done! %d / %d trucks placed in grid. No cargo missed.", wantCount, totalTrucks),
-                false, Color3.fromRGB(80, 200, 100))
+            setBatchStatus(string.format("✓ Done! %d truck(s) sent (no missed cargo).", trucksDone), false)
         end
 
         task.wait(1)
-        cgRunning          = false
-        cgThread           = nil
-        stopCGBtn.Visible  = false
+        batchRunning         = false
+        batchThread          = nil
+        stopBatchBtn.Visible = false
     end)
 end)
 
+-- Cleanup for batch truck thread
 table.insert(VH.cleanupTasks, function()
-    cgRunning = false
-    if cgThread then pcall(task.cancel, cgThread); cgThread = nil end
+    batchRunning = false
+    if batchThread then pcall(task.cancel, batchThread); batchThread = nil end
 end)
 
 -- ════════════════════════════════════════════════════════════════════════════════
@@ -1925,12 +1595,14 @@ end)
 local Lighting   = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 
+-- ── Snapshot original Lighting values ─────────────────────────────────────────
 local origClockTime = Lighting.ClockTime
 local origFogEnd    = Lighting.FogEnd
 local origFogStart  = Lighting.FogStart
 local origFogColor  = Lighting.FogColor
 local origShadows   = Lighting.GlobalShadows
 
+-- ── Shared connection handles ──────────────────────────────────────────────────
 local dayConn   = nil
 local nightConn = nil
 local fogConn   = nil
@@ -1940,8 +1612,10 @@ local function stopDayNight()
     if nightConn then nightConn:Disconnect(); nightConn = nil end
 end
 
+-- ── ENVIRONMENT ───────────────────────────────────────────────────────────────
 makeLabel(worldPage, "Environment")
 
+-- Always Day
 local _, _, alwaysDayTb, alwaysDayKnob = makeToggle(worldPage, "Always Day", false, function(v)
     if v then
         stopDayNight()
@@ -1955,6 +1629,7 @@ local _, _, alwaysDayTb, alwaysDayKnob = makeToggle(worldPage, "Always Day", fal
     end
 end)
 
+-- Auto-enable Always Day 1 second after load
 task.delay(1, function()
     stopDayNight()
     Lighting.ClockTime = 14
@@ -1971,6 +1646,7 @@ task.delay(1, function()
     end
 end)
 
+-- Always Night (mutually exclusive with Always Day)
 makeToggle(worldPage, "Always Night", false, function(v)
     if v then
         stopDayNight()
@@ -1984,6 +1660,7 @@ makeToggle(worldPage, "Always Night", false, function(v)
     end
 end)
 
+-- Remove Fog — Heartbeat-enforced so the server can't reset it
 makeToggle(worldPage, "Remove Fog", false, function(v)
     if fogConn then fogConn:Disconnect(); fogConn = nil end
     if v then
@@ -2000,10 +1677,12 @@ makeToggle(worldPage, "Remove Fog", false, function(v)
     end
 end)
 
+-- Shadows
 makeToggle(worldPage, "Shadows", true, function(v)
     Lighting.GlobalShadows = v
 end)
 
+-- ── WATER ─────────────────────────────────────────────────────────────────────
 makeSep(worldPage)
 makeLabel(worldPage, "Water")
 
@@ -2049,9 +1728,12 @@ makeToggle(worldPage, "Remove Water", false, function(v)
     end
 end)
 
+-- ── WORLD (reserved) ──────────────────────────────────────────────────────────
 makeSep(worldPage)
 makeLabel(worldPage, "World")
+-- reserved for future features
 
+-- ── Cleanup (World Tab) ────────────────────────────────────────────────────────
 table.insert(VH.cleanupTasks, function()
     stopDayNight()
     if fogConn then fogConn:Disconnect(); fogConn = nil end
