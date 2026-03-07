@@ -728,17 +728,24 @@ runBtn.MouseButton1Click:Connect(function()
                     end
                 end
 
-                task.wait(2)
+                -- Phase 2: retry any cargo that didn't reach TargetCFrame.
+                -- FIX: Progress bar now only counts + shows the MISSED items still on
+                -- the giver's plot, not the full teleportedParts list.
+                task.wait(2) -- give task.spawns time to finish recording
 
                 local MAX_TRIES = 25
                 local attempt   = 0
 
+                -- Helper: returns only items that are still far from their target
+                -- AND are still on the giver's plot (i.e. not yet on receiver side).
                 local function getMissed()
                     local missed = {}
                     for _, data in ipairs(teleportedParts) do
                         if data.Instance and data.Instance.Parent then
                             local dist = (data.Instance.Position - data.TargetCFrame.Position).Magnitude
                             if dist > 8 then
+                                -- Only include if the part is still near the giver's plot origin
+                                -- (within 500 studs, a generous threshold covering any plot size).
                                 local distFromGiver = (data.Instance.Position - GiveBaseOrigin.Position).Magnitude
                                 if distFromGiver < 500 then
                                     table.insert(missed, data)
@@ -752,9 +759,10 @@ runBtn.MouseButton1Click:Connect(function()
                 local missedList = getMissed()
 
                 if #missedList > 0 then
+                    -- FIX: Show progress bar with ONLY the missed count, not cargoTotal
                     progTrucks.Visible = true
                     setProgTrucks(0, #missedList)
-                    local missedTotal = #missedList
+                    local missedTotal = #missedList  -- fixed denominator for Part 2
 
                     local itemsDone = 0
 
@@ -780,13 +788,15 @@ runBtn.MouseButton1Click:Connect(function()
                             item.CFrame = data.TargetCFrame
                             task.wait(0.3)
 
+                            -- Update progress immediately after each individual item
                             itemsDone += 1
                             setProgTrucks(itemsDone, missedTotal)
-                            task.wait()
+                            task.wait() -- yield so the UI tween actually renders
                         end
 
                         task.wait(1)
                         missedList = getMissed()
+                        -- Only advance itemsDone forward, never backwards
                         local confirmed = missedTotal - #missedList
                         if confirmed > itemsDone then
                             itemsDone = confirmed
@@ -803,6 +813,7 @@ runBtn.MouseButton1Click:Connect(function()
                     setProgTrucks(missedTotal, missedTotal)
                     task.wait(1)
                 else
+                    -- No missed cargo at all — mark trucks bar as fully complete
                     setProgTrucks(truckCount, truckCount)
                 end
             end
@@ -1140,13 +1151,15 @@ makeBtn(dupePage, "▶  Teleport Truck", Color3.fromRGB(35, 55, 65), function()
                     item.CFrame = data.TargetCFrame
                     task.wait(0.3)
 
+                    -- Update progress immediately after each individual item
                     itemsDone += 1
                     setTruckProg(itemsDone, missedTotal)
-                    task.wait()
+                    task.wait() -- yield so the UI tween actually renders
                 end
 
                 task.wait(1)
                 missedList = getMissed()
+                -- Only advance itemsDone forward, never backwards
                 local confirmed = missedTotal - #missedList
                 if confirmed > itemsDone then
                     itemsDone = confirmed
@@ -1180,7 +1193,7 @@ table.insert(VH.cleanupTasks, function()
 end)
 
 -- ════════════════════════════════════════════════════════════════════════════════
--- BATCH TRUCK TELEPORT (Dupe Tab — teleport a specific number of truck loads)
+-- BATCH TRUCK TELEPORT (Dupe Tab — teleport a specific number of trucks)
 -- ════════════════════════════════════════════════════════════════════════════════
 
 makeSep(dupePage)
@@ -1189,77 +1202,51 @@ makeLabel(dupePage, "Batch Truck Teleport")
 local _, getBatchGiverName    = makeDupeDropdown("Giver",    dupePage)
 local _, getBatchReceiverName = makeDupeDropdown("Receiver", dupePage)
 
--- ── Amount input row ──────────────────────────────────────────────────────────
-local amountRow = Instance.new("Frame", dupePage)
-amountRow.Size             = UDim2.new(1, -12, 0, 36)
-amountRow.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
-amountRow.BorderSizePixel  = 0
-Instance.new("UICorner", amountRow).CornerRadius = UDim.new(0, 8)
-local amountStroke = Instance.new("UIStroke", amountRow)
-amountStroke.Color        = Color3.fromRGB(60, 60, 90)
-amountStroke.Thickness    = 1
-amountStroke.Transparency = 0.5
+-- ── Truck count input row ─────────────────────────────────────────────────────
+local batchCountRow = Instance.new("Frame", dupePage)
+batchCountRow.Size             = UDim2.new(1, -12, 0, 36)
+batchCountRow.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+batchCountRow.BorderSizePixel  = 0
+Instance.new("UICorner", batchCountRow).CornerRadius = UDim.new(0, 8)
+local batchRowStroke = Instance.new("UIStroke", batchCountRow)
+batchRowStroke.Color        = Color3.fromRGB(60, 60, 90)
+batchRowStroke.Thickness    = 1
+batchRowStroke.Transparency = 0.5
 
-local amountCaption = Instance.new("TextLabel", amountRow)
-amountCaption.Size               = UDim2.new(0, 120, 1, 0)
-amountCaption.Position           = UDim2.new(0, 12, 0, 0)
-amountCaption.BackgroundTransparency = 1
-amountCaption.Font               = Enum.Font.GothamBold
-amountCaption.TextSize           = 12
-amountCaption.TextColor3         = THEME_TEXT
-amountCaption.TextXAlignment     = Enum.TextXAlignment.Left
-amountCaption.Text               = "Trucks to send:"
+local batchCountLbl = Instance.new("TextLabel", batchCountRow)
+batchCountLbl.Size               = UDim2.new(1, -80, 1, 0)
+batchCountLbl.Position           = UDim2.new(0, 12, 0, 0)
+batchCountLbl.BackgroundTransparency = 1
+batchCountLbl.Font               = Enum.Font.GothamSemibold
+batchCountLbl.TextSize           = 13
+batchCountLbl.TextColor3         = THEME_TEXT
+batchCountLbl.TextXAlignment     = Enum.TextXAlignment.Left
+batchCountLbl.Text               = "Trucks to Teleport"
 
--- Minus button
-local minusBtn = Instance.new("TextButton", amountRow)
-minusBtn.Size             = UDim2.new(0, 26, 0, 22)
-minusBtn.Position         = UDim2.new(1, -92, 0.5, -11)
-minusBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 30)
-minusBtn.BorderSizePixel  = 0
-minusBtn.Font             = Enum.Font.GothamBold
-minusBtn.TextSize         = 16
-minusBtn.TextColor3       = THEME_TEXT
-minusBtn.Text             = "−"
-minusBtn.AutoButtonColor  = false
-Instance.new("UICorner", minusBtn).CornerRadius = UDim.new(0, 5)
+local batchCountBox = Instance.new("TextBox", batchCountRow)
+batchCountBox.Size               = UDim2.new(0, 60, 0, 24)
+batchCountBox.Position           = UDim2.new(1, -68, 0.5, -12)
+batchCountBox.BackgroundColor3   = Color3.fromRGB(30, 30, 45)
+batchCountBox.BorderSizePixel    = 0
+batchCountBox.Font               = Enum.Font.GothamBold
+batchCountBox.TextSize           = 13
+batchCountBox.TextColor3         = THEME_TEXT
+batchCountBox.PlaceholderText    = "e.g. 3"
+batchCountBox.PlaceholderColor3  = Color3.fromRGB(80, 80, 110)
+batchCountBox.Text               = ""
+batchCountBox.TextXAlignment     = Enum.TextXAlignment.Center
+batchCountBox.ClearTextOnFocus   = false
+Instance.new("UICorner", batchCountBox).CornerRadius = UDim.new(0, 6)
+local batchBoxStroke = Instance.new("UIStroke", batchCountBox)
+batchBoxStroke.Color        = Color3.fromRGB(70, 70, 120)
+batchBoxStroke.Thickness    = 1
+batchBoxStroke.Transparency = 0.4
 
--- Amount display / editable box
-local amountBox = Instance.new("TextBox", amountRow)
-amountBox.Size               = UDim2.new(0, 42, 0, 22)
-amountBox.Position           = UDim2.new(1, -62, 0.5, -11)
-amountBox.BackgroundColor3   = Color3.fromRGB(30, 30, 42)
-amountBox.BorderSizePixel    = 0
-amountBox.Font               = Enum.Font.GothamBold
-amountBox.TextSize           = 13
-amountBox.TextColor3         = THEME_TEXT
-amountBox.Text               = "1"
-amountBox.TextXAlignment     = Enum.TextXAlignment.Center
-amountBox.ClearTextOnFocus   = false
-Instance.new("UICorner", amountBox).CornerRadius = UDim.new(0, 5)
-
--- Plus button
-local plusBtn = Instance.new("TextButton", amountRow)
-plusBtn.Size             = UDim2.new(0, 26, 0, 22)
-plusBtn.Position         = UDim2.new(1, -32, 0.5, -11)
-plusBtn.BackgroundColor3 = Color3.fromRGB(30, 55, 30)
-plusBtn.BorderSizePixel  = 0
-plusBtn.Font             = Enum.Font.GothamBold
-plusBtn.TextSize         = 16
-plusBtn.TextColor3       = THEME_TEXT
-plusBtn.Text             = "+"
-plusBtn.AutoButtonColor  = false
-Instance.new("UICorner", plusBtn).CornerRadius = UDim.new(0, 5)
-
-local batchAmount = 1
-
-local function clampBatchAmount(n)
-    batchAmount = math.max(1, math.floor(tonumber(n) or 1))
-    amountBox.Text = tostring(batchAmount)
-end
-
-minusBtn.MouseButton1Click:Connect(function() clampBatchAmount(batchAmount - 1) end)
-plusBtn.MouseButton1Click:Connect(function()  clampBatchAmount(batchAmount + 1) end)
-amountBox.FocusLost:Connect(function() clampBatchAmount(amountBox.Text) end)
+-- Only allow numeric input
+batchCountBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local clean = batchCountBox.Text:gsub("[^%d]", "")
+    if clean ~= batchCountBox.Text then batchCountBox.Text = clean end
+end)
 
 -- ── Status bar ────────────────────────────────────────────────────────────────
 local batchStatusBar = Instance.new("Frame", dupePage)
@@ -1284,7 +1271,7 @@ batchStatusLbl.Font                   = Enum.Font.Gotham
 batchStatusLbl.TextSize               = 12
 batchStatusLbl.TextColor3             = Color3.fromRGB(160, 155, 175)
 batchStatusLbl.TextXAlignment         = Enum.TextXAlignment.Left
-batchStatusLbl.Text                   = "Ready"
+batchStatusLbl.Text                   = "Ready — enter a truck count"
 
 local function setBatchStatus(msg, active)
     batchStatusLbl.Text = msg
@@ -1296,16 +1283,22 @@ local function setBatchStatus(msg, active)
 end
 
 -- ── Progress bars ─────────────────────────────────────────────────────────────
-local batchTruckProgBar, setBatchTruckProg, resetBatchTruckProg = makeProgressBar(dupePage, "Trucks")
-local batchCargoProgBar, setBatchCargoProg, resetBatchCargoProg = makeProgressBar(dupePage, "Cargo")
+local batchTruckProgBar, setBatchTruckProg, resetBatchTruckProg =
+    makeProgressBar(dupePage, "Trucks")
+local batchCargoProgBar, setBatchCargoProg, resetBatchCargoProg =
+    makeProgressBar(dupePage, "Missed Cargo")
 
--- ── Control buttons ───────────────────────────────────────────────────────────
-local batchRunning = false
-local batchThread  = nil
+-- ── State ─────────────────────────────────────────────────────────────────────
+local batchTruckRunning = false
+local batchTruckThread  = nil
 
+-- ── Stop button ───────────────────────────────────────────────────────────────
 local stopBatchBtn = makeBtn(dupePage, "■  Stop Batch", Color3.fromRGB(65, 25, 25), function()
-    batchRunning = false
-    if batchThread then pcall(task.cancel, batchThread); batchThread = nil end
+    batchTruckRunning = false
+    if batchTruckThread then
+        pcall(task.cancel, batchTruckThread)
+        batchTruckThread = nil
+    end
     setBatchStatus("Stopped", false)
     resetBatchTruckProg()
     resetBatchCargoProg()
@@ -1313,43 +1306,57 @@ local stopBatchBtn = makeBtn(dupePage, "■  Stop Batch", Color3.fromRGB(65, 25,
 end)
 stopBatchBtn.Visible = false
 
-makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), function()
-    if batchRunning then setBatchStatus("Already running!", true) return end
+-- ── Run button ────────────────────────────────────────────────────────────────
+makeBtn(dupePage, "▶  Teleport Batch", Color3.fromRGB(35, 55, 65), function()
+    if batchTruckRunning then setBatchStatus("Already running!", true) return end
 
+    -- ── Validate player selection ─────────────────────────────────────────
     local gName = getBatchGiverName()
     local rName = getBatchReceiverName()
     if gName == "" or rName == "" then
-        setBatchStatus("⚠ Select both players!", false) return
+        setBatchStatus("Select both players!", false) return
     end
 
-    local LP   = Players.LocalPlayer
-    local Char = LP.Character
-    if not Char then setBatchStatus("No character found!", false) return end
+    -- ── Validate count input ──────────────────────────────────────────────
+    local wantedCount = tonumber(batchCountBox.Text)
+    if not wantedCount or wantedCount < 1 then
+        setBatchStatus("⚠ Enter a valid truck count!", false) return
+    end
+    wantedCount = math.floor(wantedCount)
 
-    -- Count trucks on the giver's plot
+    -- ── Count available trucks on giver's plot ────────────────────────────
     local availableTrucks = {}
     for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-        if v.Name == "Owner" and tostring(v.Value) == gName and v.Parent:FindFirstChild("DriveSeat") then
+        if v.Name == "Owner" and tostring(v.Value) == gName
+            and v.Parent:FindFirstChild("DriveSeat") then
             table.insert(availableTrucks, v.Parent)
         end
     end
-    local truckCount = #availableTrucks
+    local actualCount = #availableTrucks
 
-    -- Validate requested amount vs available
-    if truckCount == 0 then
+    if actualCount == 0 then
         setBatchStatus("⚠ No trucks found on giver's plot!", false) return
     end
 
-    if batchAmount > truckCount then
-        setBatchStatus(string.format("⚠ Requested %d trucks but only %d available!", batchAmount, truckCount), false)
-        return
+    if wantedCount < actualCount then
+        setBatchStatus(string.format(
+            "⚠ You entered %d but giver has %d trucks — teleporting %d",
+            wantedCount, actualCount, wantedCount), false)
+        -- Trim the list to only the requested amount
+        while #availableTrucks > wantedCount do
+            table.remove(availableTrucks)
+        end
+        task.wait(2) -- let the user read the message before starting
+    elseif wantedCount > actualCount then
+        setBatchStatus(string.format(
+            "⚠ You entered %d but only %d truck(s) found — teleporting %d",
+            wantedCount, actualCount, actualCount), false)
+        -- wantedCount is too high; we'll just do however many exist
+        wantedCount = actualCount
+        task.wait(2)
     end
 
-    if batchAmount < truckCount then
-        -- Informational notice — still allowed to proceed
-        setBatchStatus(string.format("ℹ Sending %d of %d available trucks...", batchAmount, truckCount), true)
-    end
-
+    -- ── Find bases ────────────────────────────────────────────────────────
     local GiveBaseOrigin, ReceiverBaseOrigin
     for _, v in pairs(workspace.Properties:GetDescendants()) do
         if v.Name == "Owner" then
@@ -1358,18 +1365,20 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
             if val == rName then ReceiverBaseOrigin = v.Parent:FindFirstChild("OriginSquare") end
         end
     end
+    if not GiveBaseOrigin     then setBatchStatus("Giver base not found!",    false) return end
+    if not ReceiverBaseOrigin then setBatchStatus("Receiver base not found!", false) return end
 
-    if not GiveBaseOrigin     then setBatchStatus("⚠ Giver base not found!",    false) return end
-    if not ReceiverBaseOrigin then setBatchStatus("⚠ Receiver base not found!", false) return end
-
-    batchRunning         = true
+    -- ── All checks passed — kick off the thread ───────────────────────────
+    batchTruckRunning    = true
     stopBatchBtn.Visible = true
     resetBatchTruckProg()
     resetBatchCargoProg()
-    setBatchStatus(string.format("Teleporting %d truck(s)...", batchAmount), true)
+    setBatchStatus(string.format("Starting — %d truck(s) queued...", #availableTrucks), true)
 
-    batchThread = task.spawn(function()
-        local RS = game:GetService("ReplicatedStorage")
+    batchTruckThread = task.spawn(function()
+        local RS   = game:GetService("ReplicatedStorage")
+        local LP   = Players.LocalPlayer
+        local Char = LP.Character or LP.CharacterAdded:Wait()
 
         local function isPointInside(point, boxCFrame, boxSize)
             local r = boxCFrame:PointToObjectSpace(point)
@@ -1378,36 +1387,24 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
                and math.abs(r.Z) <= boxSize.Z / 2
         end
 
-        local allTeleportedParts = {}  -- cargo records across all trucks
-        local trucksDone         = 0
+        -- Collect ALL teleported cargo parts across every truck
+        local allTeleportedParts = {}
 
         batchTruckProgBar.Visible = true
-        setBatchTruckProg(0, batchAmount)
+        setBatchTruckProg(0, #availableTrucks)
 
-        -- Re-collect trucks at run-time (list might have changed since button press)
-        local truckQueue = {}
-        for _, v in pairs(workspace.PlayerModels:GetDescendants()) do
-            if v.Name == "Owner" and tostring(v.Value) == gName and v.Parent:FindFirstChild("DriveSeat") then
-                table.insert(truckQueue, v.Parent)
-                if #truckQueue >= batchAmount then break end
-            end
-        end
-
-        -- ── Per-truck loop ────────────────────────────────────────────────────
-        for _, truckModel in ipairs(truckQueue) do
-            if not batchRunning then break end
-
-            -- Guard: truck might have disappeared
+        -- ── Phase 1: teleport each truck (and its cargo) ──────────────────
+        local trucksDone = 0
+        for _, truckModel in ipairs(availableTrucks) do
+            if not batchTruckRunning then break end
             if not (truckModel and truckModel.Parent) then
-                setBatchStatus(string.format(
-                    "⚠ Truck %d/%d vanished, skipping...", trucksDone + 1, batchAmount), true)
                 trucksDone += 1
-                setBatchTruckProg(trucksDone, batchAmount)
+                setBatchTruckProg(trucksDone, #availableTrucks)
                 continue
             end
 
             setBatchStatus(string.format(
-                "Truck %d / %d — sitting in...", trucksDone + 1, batchAmount), true)
+                "Teleporting truck %d / %d...", trucksDone + 1, #availableTrucks), true)
 
             local ignoredParts     = {}
             local DidTruckTeleport = false
@@ -1422,20 +1419,7 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
             end
 
             truckModel.DriveSeat:Sit(Char.Humanoid)
-            local waitIter = 0
-            repeat
-                task.wait()
-                truckModel.DriveSeat:Sit(Char.Humanoid)
-                waitIter += 1
-            until Char.Humanoid.SeatPart or waitIter > 100
-
-            if not Char.Humanoid.SeatPart then
-                setBatchStatus(string.format(
-                    "⚠ Could not sit in truck %d/%d, skipping...", trucksDone + 1, batchAmount), true)
-                trucksDone += 1
-                setBatchTruckProg(trucksDone, batchAmount)
-                continue
-            end
+            repeat task.wait() truckModel.DriveSeat:Sit(Char.Humanoid) until Char.Humanoid.SeatPart
 
             local mCF, mSz = truckModel:GetBoundingBox()
 
@@ -1446,9 +1430,9 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
                 if p:IsA("BasePart") then ignoredParts[p] = true end
             end
 
-            -- Scan for cargo inside this truck's bounding box
+            -- Scan workspace for cargo inside this truck's bounding box
             for _, part in ipairs(workspace:GetDescendants()) do
-                if not batchRunning then break end
+                if not batchTruckRunning then break end
                 if part:IsA("BasePart") and not ignoredParts[part] then
                     if part.Name == "Main" or part.Name == "WoodSection" then
                         if part:FindFirstChild("Weld")
@@ -1475,6 +1459,7 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
                 end
             end
 
+            -- Eject, destroy seat, close door, re-teleport truck
             local SitPart   = Char.Humanoid.SeatPart
             local DoorHinge = SitPart.Parent:FindFirstChild("PaintParts")
                 and SitPart.Parent.PaintParts:FindFirstChild("DoorLeft")
@@ -1491,22 +1476,19 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
             end
 
             trucksDone += 1
-            setBatchTruckProg(trucksDone, batchAmount)
-            task.wait(0.3) -- brief pause between trucks
+            setBatchTruckProg(trucksDone, #availableTrucks)
+            task.wait(0.3)
         end
 
-        setBatchTruckProg(batchAmount, batchAmount)
-        setBatchStatus(string.format("✓ %d truck(s) sent — checking cargo...", trucksDone), true)
+        -- ── Phase 2: retry missed cargo across all trucks ──────────────────
+        task.wait(2) -- let task.spawns finish recording
 
-        -- Give all task.spawns time to record their cargo
-        task.wait(2)
-
-        -- ── Cargo retry loop ──────────────────────────────────────────────────
-        local function getMissed()
+        local function getMissedBatch()
             local missed = {}
             for _, data in ipairs(allTeleportedParts) do
                 if data.Instance and data.Instance.Parent then
-                    if (data.Instance.Position - data.TargetCFrame.Position).Magnitude > 8 then
+                    local dist = (data.Instance.Position - data.TargetCFrame.Position).Magnitude
+                    if dist > 8 then
                         local distFromGiver = (data.Instance.Position - GiveBaseOrigin.Position).Magnitude
                         if distFromGiver < 500 then
                             table.insert(missed, data)
@@ -1517,7 +1499,7 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
             return missed
         end
 
-        local missedList = getMissed()
+        local missedList = getMissedBatch()
 
         if #missedList > 0 then
             batchCargoProgBar.Visible = true
@@ -1527,13 +1509,13 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
             local attempt     = 0
             local itemsDone   = 0
 
-            while #missedList > 0 and batchRunning and attempt < MAX_TRIES do
+            while #missedList > 0 and batchTruckRunning and attempt < MAX_TRIES do
                 attempt += 1
                 setBatchStatus(string.format(
                     "Cargo retry %d/%d — %d part(s) left...", attempt, MAX_TRIES, #missedList), true)
 
                 for _, data in ipairs(missedList) do
-                    if not batchRunning then break end
+                    if not batchTruckRunning then break end
                     local item = data.Instance
                     if not (item and item.Parent) then continue end
 
@@ -1555,7 +1537,7 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
                 end
 
                 task.wait(1)
-                missedList = getMissed()
+                missedList = getMissedBatch()
                 local confirmed = missedTotal - #missedList
                 if confirmed > itemsDone then
                     itemsDone = confirmed
@@ -1564,28 +1546,28 @@ makeBtn(dupePage, "▶  Start Batch Teleport", Color3.fromRGB(35, 55, 45), funct
             end
 
             if #missedList == 0 then
-                setBatchStatus(string.format("✓ Done! %d truck(s) + all cargo sent.", trucksDone), false)
+                setBatchStatus("✓ All trucks + cargo teleported!", true)
             else
                 setBatchStatus(string.format(
-                    "Done — gave up after %d tries, %d cargo part(s) missed.", MAX_TRIES, #missedList), false)
+                    "Gave up after %d tries — %d part(s) missed", MAX_TRIES, #missedList), false)
             end
 
             setBatchCargoProg(missedTotal, missedTotal)
         else
-            setBatchStatus(string.format("✓ Done! %d truck(s) sent (no missed cargo).", trucksDone), false)
+            setBatchStatus(string.format("✓ %d truck(s) teleported! (no missed cargo)", trucksDone), false)
         end
 
         task.wait(1)
-        batchRunning         = false
-        batchThread          = nil
+        batchTruckRunning    = false
+        batchTruckThread     = nil
         stopBatchBtn.Visible = false
     end)
 end)
 
 -- Cleanup for batch truck thread
 table.insert(VH.cleanupTasks, function()
-    batchRunning = false
-    if batchThread then pcall(task.cancel, batchThread); batchThread = nil end
+    batchTruckRunning = false
+    if batchTruckThread then pcall(task.cancel, batchTruckThread); batchTruckThread = nil end
 end)
 
 -- ════════════════════════════════════════════════════════════════════════════════
