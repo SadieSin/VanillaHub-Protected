@@ -40,10 +40,8 @@ local function getFlyToggleEnabled()   return _G.VH and _G.VH.flyToggleEnabled e
 local function getIsFlyEnabled()       return _G.VH and _G.VH.isFlyEnabled end
 
 -- ════════════════════════════════════════════════════
--- WOOD TAB — COMING SOON CARD
+-- SHARED UI HELPER
 -- ════════════════════════════════════════════════════
-
-local woodPage = pages["WoodTab"]
 
 local function corner(p, r)
     local c = Instance.new("UICorner")
@@ -51,25 +49,31 @@ local function corner(p, r)
     c.Parent = p
 end
 
+-- ════════════════════════════════════════════════════
+-- WOOD TAB — COMING SOON CARD
+-- ════════════════════════════════════════════════════
+
+local woodPage = pages["WoodTab"]
+
 -- Outer card
 local csCard = Instance.new("Frame", woodPage)
-csCard.Size              = UDim2.new(0, 260, 0, 200)
-csCard.Position          = UDim2.new(0.5, -130, 0.5, -100)
-csCard.BackgroundColor3  = Color3.fromRGB(16, 14, 18)
-csCard.BorderSizePixel   = 0
+csCard.Size               = UDim2.new(0, 260, 0, 200)
+csCard.Position           = UDim2.new(0.5, -130, 0.5, -100)
+csCard.BackgroundColor3   = Color3.fromRGB(16, 14, 18)
+csCard.BorderSizePixel    = 0
 corner(csCard, 12)
 
 local csStroke = Instance.new("UIStroke", csCard)
 csStroke.Color     = Color3.fromRGB(90, 76, 88)
 csStroke.Thickness = 1.5
 
--- Animate border colour
+-- Animate border colour cycling
 task.spawn(function()
     local colors = {
-        Color3.fromRGB(100,85,105),
-        Color3.fromRGB(120,100,130),
-        Color3.fromRGB(80,68,90),
-        Color3.fromRGB(110,90,118),
+        Color3.fromRGB(100, 85, 105),
+        Color3.fromRGB(120, 100, 130),
+        Color3.fromRGB(80,  68,  90),
+        Color3.fromRGB(110, 90, 118),
     }
     local i = 1
     while csCard and csCard.Parent do
@@ -81,7 +85,7 @@ task.spawn(function()
     end
 end)
 
--- Grid lines (horizontal)
+-- Grid lines horizontal
 for _, top in ipairs({22, 68, 114, 160}) do
     local gh = Instance.new("Frame", csCard)
     gh.Size             = UDim2.new(1, 0, 0, 1)
@@ -91,7 +95,7 @@ for _, top in ipairs({22, 68, 114, 160}) do
     gh.ZIndex           = 2
 end
 
--- Grid lines (vertical)
+-- Grid lines vertical
 for _, left in ipairs({28, 72, 116, 160, 204, 248}) do
     local gv = Instance.new("Frame", csCard)
     gv.Size             = UDim2.new(0, 1, 1, 0)
@@ -103,15 +107,14 @@ end
 
 -- Glow blob
 local glowBlob = Instance.new("Frame", csCard)
-glowBlob.Size            = UDim2.new(0, 80, 0, 80)
-glowBlob.Position        = UDim2.new(0.5, -40, 0, 12)
-glowBlob.BackgroundColor3 = Color3.fromRGB(100, 80, 110)
+glowBlob.Size                   = UDim2.new(0, 80, 0, 80)
+glowBlob.Position               = UDim2.new(0.5, -40, 0, 12)
+glowBlob.BackgroundColor3       = Color3.fromRGB(100, 80, 110)
 glowBlob.BackgroundTransparency = 1 - 0.32
-glowBlob.BorderSizePixel = 0
-glowBlob.ZIndex          = 3
+glowBlob.BorderSizePixel        = 0
+glowBlob.ZIndex                 = 3
 corner(glowBlob, 40)
 
--- Animate glow blob floating
 task.spawn(function()
     while glowBlob and glowBlob.Parent do
         TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
@@ -139,14 +142,13 @@ lockStroke.Color     = Color3.fromRGB(160, 138, 157)
 lockStroke.Thickness = 1.5
 
 local lockIcon = Instance.new("TextLabel", lockCircle)
-lockIcon.Size                = UDim2.new(1, 0, 1, 0)
+lockIcon.Size                   = UDim2.new(1, 0, 1, 0)
 lockIcon.BackgroundTransparency = 1
-lockIcon.Text                = "🪵"
-lockIcon.TextScaled          = true
-lockIcon.Font                = Enum.Font.GothamBold
-lockIcon.ZIndex              = 5
+lockIcon.Text                   = "🪵"
+lockIcon.TextScaled             = true
+lockIcon.Font                   = Enum.Font.GothamBold
+lockIcon.ZIndex                 = 5
 
--- Animate icon floating (mirrors glow)
 task.spawn(function()
     while lockCircle and lockCircle.Parent do
         TweenService:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
@@ -160,18 +162,17 @@ task.spawn(function()
     end
 end)
 
--- "COMING SOON" title
+-- Title
 local csTitle = Instance.new("TextLabel", csCard)
-csTitle.Size                = UDim2.new(1, -16, 0, 20)
-csTitle.Position            = UDim2.new(0, 8, 0, 78)
+csTitle.Size                   = UDim2.new(1, -16, 0, 20)
+csTitle.Position               = UDim2.new(0, 8, 0, 78)
 csTitle.BackgroundTransparency = 1
-csTitle.Text                = "COMING SOON"
-csTitle.Font                = Enum.Font.GothamBold
-csTitle.TextSize            = 17
-csTitle.TextColor3          = Color3.fromRGB(230, 206, 226)
-csTitle.TextXAlignment      = Enum.TextXAlignment.Center
-csTitle.LetterSpacing       = 3
-csTitle.ZIndex              = 6
+csTitle.Text                   = "COMING SOON"
+csTitle.Font                   = Enum.Font.GothamBold
+csTitle.TextSize               = 17
+csTitle.TextColor3             = Color3.fromRGB(230, 206, 226)
+csTitle.TextXAlignment         = Enum.TextXAlignment.Center
+csTitle.ZIndex                 = 6
 
 -- Accent line
 local accentLine = Instance.new("Frame", csCard)
@@ -184,30 +185,30 @@ corner(accentLine, 1)
 
 -- Subtitle
 local csSub = Instance.new("TextLabel", csCard)
-csSub.Size                = UDim2.new(1, -20, 0, 16)
-csSub.Position            = UDim2.new(0, 10, 0, 112)
+csSub.Size                   = UDim2.new(1, -20, 0, 16)
+csSub.Position               = UDim2.new(0, 10, 0, 112)
 csSub.BackgroundTransparency = 1
-csSub.Text                = "WOOD TAB — UNDER DEVELOPMENT"
-csSub.Font                = Enum.Font.GothamSemibold
-csSub.TextSize            = 10
-csSub.TextColor3          = Color3.fromRGB(90, 76, 88)
-csSub.TextXAlignment      = Enum.TextXAlignment.Center
-csSub.ZIndex              = 6
+csSub.Text                   = "WOOD TAB — UNDER DEVELOPMENT"
+csSub.Font                   = Enum.Font.GothamSemibold
+csSub.TextSize               = 10
+csSub.TextColor3             = Color3.fromRGB(90, 76, 88)
+csSub.TextXAlignment         = Enum.TextXAlignment.Center
+csSub.ZIndex                 = 6
 
 -- Description
 local csDesc = Instance.new("TextLabel", csCard)
-csDesc.Size                = UDim2.new(1, -24, 0, 36)
-csDesc.Position            = UDim2.new(0, 12, 0, 130)
+csDesc.Size                   = UDim2.new(1, -24, 0, 36)
+csDesc.Position               = UDim2.new(0, 12, 0, 130)
 csDesc.BackgroundTransparency = 1
-csDesc.Text                = "Being rebuilt with improved tree cutting,\nsmarter log dragging & reliable sell logic."
-csDesc.Font                = Enum.Font.Gotham
-csDesc.TextSize            = 10
-csDesc.TextColor3          = Color3.fromRGB(90, 76, 88)
-csDesc.TextXAlignment      = Enum.TextXAlignment.Center
-csDesc.TextWrapped         = true
-csDesc.ZIndex              = 6
+csDesc.Text                   = "Being rebuilt with improved tree cutting,\nsmarter log dragging & reliable sell logic."
+csDesc.Font                   = Enum.Font.Gotham
+csDesc.TextSize               = 10
+csDesc.TextColor3             = Color3.fromRGB(90, 76, 88)
+csDesc.TextXAlignment         = Enum.TextXAlignment.Center
+csDesc.TextWrapped            = true
+csDesc.ZIndex                 = 6
 
--- Status pill background
+-- Status pill
 local pillBG = Instance.new("Frame", csCard)
 pillBG.Size             = UDim2.new(0, 148, 0, 20)
 pillBG.Position         = UDim2.new(0.5, -74, 0, 172)
@@ -217,11 +218,10 @@ pillBG.ZIndex           = 6
 corner(pillBG, 10)
 
 local pillStroke = Instance.new("UIStroke", pillBG)
-pillStroke.Color       = Color3.fromRGB(90, 76, 88)
-pillStroke.Thickness   = 1
+pillStroke.Color        = Color3.fromRGB(90, 76, 88)
+pillStroke.Thickness    = 1
 pillStroke.Transparency = 0.4
 
--- Pulse dot
 local pulseDot = Instance.new("Frame", pillBG)
 pulseDot.Size             = UDim2.new(0, 6, 0, 6)
 pulseDot.Position         = UDim2.new(0, 10, 0.5, -3)
@@ -230,7 +230,6 @@ pulseDot.BorderSizePixel  = 0
 pulseDot.ZIndex           = 7
 corner(pulseDot, 3)
 
--- Animate pulse dot
 task.spawn(function()
     while pulseDot and pulseDot.Parent do
         TweenService:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
@@ -244,17 +243,16 @@ task.spawn(function()
     end
 end)
 
--- Pill label
 local pillLbl = Instance.new("TextLabel", pillBG)
-pillLbl.Size                = UDim2.new(1, -26, 1, 0)
-pillLbl.Position            = UDim2.new(0, 22, 0, 0)
+pillLbl.Size                   = UDim2.new(1, -26, 1, 0)
+pillLbl.Position               = UDim2.new(0, 22, 0, 0)
 pillLbl.BackgroundTransparency = 1
-pillLbl.Text                = "In Development  •  v0.0"
-pillLbl.Font                = Enum.Font.GothamSemibold
-pillLbl.TextSize            = 10
-pillLbl.TextColor3          = Color3.fromRGB(160, 138, 157)
-pillLbl.TextXAlignment      = Enum.TextXAlignment.Left
-pillLbl.ZIndex              = 7
+pillLbl.Text                   = "In Development  •  v0.0"
+pillLbl.Font                   = Enum.Font.GothamSemibold
+pillLbl.TextSize               = 10
+pillLbl.TextColor3             = Color3.fromRGB(160, 138, 157)
+pillLbl.TextXAlignment         = Enum.TextXAlignment.Left
+pillLbl.ZIndex                 = 7
 
 -- ════════════════════════════════════════════════════
 -- SETTINGS TAB
@@ -266,11 +264,13 @@ local settingsPage = pages["SettingsTab"]
 local kbFrame = Instance.new("Frame", settingsPage)
 kbFrame.Size = UDim2.new(1,0,0,70); kbFrame.BackgroundColor3 = Color3.fromRGB(18,18,18)
 kbFrame.BorderSizePixel = 0; corner(kbFrame, 10)
+
 local kbTitle = Instance.new("TextLabel", kbFrame)
 kbTitle.Size=UDim2.new(1,-20,0,28); kbTitle.Position=UDim2.new(0,10,0,8)
 kbTitle.BackgroundTransparency=1; kbTitle.Font=Enum.Font.GothamBold; kbTitle.TextSize=15
 kbTitle.TextColor3=THEME_TEXT; kbTitle.TextXAlignment=Enum.TextXAlignment.Left
 kbTitle.Text="GUI Toggle Keybind"
+
 keybindButtonGUI = Instance.new("TextButton", kbFrame)
 keybindButtonGUI.Size=UDim2.new(0,200,0,28); keybindButtonGUI.Position=UDim2.new(0,10,0,36)
 keybindButtonGUI.BackgroundColor3=Color3.fromRGB(30,30,30); keybindButtonGUI.BorderSizePixel=0
@@ -278,6 +278,7 @@ keybindButtonGUI.Font=Enum.Font.Gotham; keybindButtonGUI.TextSize=14
 keybindButtonGUI.TextColor3=THEME_TEXT
 keybindButtonGUI.Text="Toggle Key: "..getCurrentToggleKey().Name
 corner(keybindButtonGUI, 8)
+
 keybindButtonGUI.MouseButton1Click:Connect(function()
     if getWaitingForKeyGUI() then return end
     keybindButtonGUI.Text = "Press any key..."
@@ -368,6 +369,7 @@ local function updateSearchResults(query)
         end
     end
 end
+
 searchInput:GetPropertyChangedSignal("Text"):Connect(function() updateSearchResults(searchInput.Text) end)
 task.delay(0.1, function() updateSearchResults("") end)
 
