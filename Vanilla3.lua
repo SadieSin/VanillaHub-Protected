@@ -50,85 +50,209 @@ local function corner(p, r)
 end
 
 -- ════════════════════════════════════════════════════
--- WOOD TAB — COMING SOON CARD (frame + circle only)
+-- WOOD TAB — COMING SOON CARD
 -- ════════════════════════════════════════════════════
 
 local woodPage = pages["WoodTab"]
 
--- Outer card frame
-local csCard = Instance.new("Frame", woodPage)
-csCard.Size               = UDim2.new(0, 260, 0, 200)
-csCard.Position           = UDim2.new(0.5, -130, 0.5, -100)
-csCard.BackgroundColor3   = Color3.fromRGB(16, 14, 18)
-csCard.BorderSizePixel    = 0
-corner(csCard, 12)
+local CS_ACCENT = Color3.fromRGB(230, 206, 226)
+local CS_DIM    = Color3.fromRGB(160, 138, 157)
+local CS_DIMMER = Color3.fromRGB(90, 76, 88)
+local CS_BG     = Color3.fromRGB(16, 14, 18)
+local CS_CARD   = Color3.fromRGB(22, 19, 25)
 
-local csStroke = Instance.new("UIStroke", csCard)
-csStroke.Color     = Color3.fromRGB(90, 76, 88)
-csStroke.Thickness = 1.5
+-- Outer card
+local csOuter = Instance.new("Frame", woodPage)
+csOuter.Size             = UDim2.new(1, -12, 0, 200)
+csOuter.BackgroundColor3 = CS_BG
+csOuter.BorderSizePixel  = 0
+corner(csOuter, 12)
 
--- Animate border colour cycling
+local csBorderStroke = Instance.new("UIStroke", csOuter)
+csBorderStroke.Color        = CS_DIMMER
+csBorderStroke.Thickness    = 1.5
+csBorderStroke.Transparency = 0
+
+-- Grid lines horizontal
+for row = 0, 3 do
+    local g = Instance.new("Frame", csOuter)
+    g.Size             = UDim2.new(1, 0, 0, 1)
+    g.Position         = UDim2.new(0, 0, 0, 22 + row * 46)
+    g.BackgroundColor3 = Color3.fromRGB(32, 28, 35)
+    g.BorderSizePixel  = 0
+    g.ZIndex           = 1
+end
+
+-- Grid lines vertical
+for col = 0, 5 do
+    local g = Instance.new("Frame", csOuter)
+    g.Size             = UDim2.new(0, 1, 1, 0)
+    g.Position         = UDim2.new(0, 28 + col * 44, 0, 0)
+    g.BackgroundColor3 = Color3.fromRGB(32, 28, 35)
+    g.BorderSizePixel  = 0
+    g.ZIndex           = 1
+end
+
+-- Glow blob
+local glowBlob = Instance.new("Frame", csOuter)
+glowBlob.Size                   = UDim2.new(0, 80, 0, 80)
+glowBlob.AnchorPoint            = Vector2.new(0.5, 0)
+glowBlob.Position               = UDim2.new(0.5, 0, 0, 16)
+glowBlob.BackgroundColor3       = Color3.fromRGB(100, 80, 110)
+glowBlob.BorderSizePixel        = 0
+glowBlob.BackgroundTransparency = 0.68
+glowBlob.ZIndex                 = 2
+corner(glowBlob, 40)
+
+-- Floating circle (no icon, no text)
+local lockCircle = Instance.new("Frame", csOuter)
+lockCircle.Size             = UDim2.new(0, 46, 0, 46)
+lockCircle.AnchorPoint      = Vector2.new(0.5, 0)
+lockCircle.Position         = UDim2.new(0.5, 0, 0, 22)
+lockCircle.BackgroundColor3 = CS_CARD
+lockCircle.BorderSizePixel  = 0
+lockCircle.ZIndex           = 3
+corner(lockCircle, 23)
+
+local lockStroke = Instance.new("UIStroke", lockCircle)
+lockStroke.Color     = CS_DIM
+lockStroke.Thickness = 1.5
+
+-- Title
+local csTitleLbl = Instance.new("TextLabel", csOuter)
+csTitleLbl.Size                   = UDim2.new(1, -16, 0, 24)
+csTitleLbl.Position               = UDim2.new(0, 8, 0, 78)
+csTitleLbl.BackgroundTransparency = 1
+csTitleLbl.Font                   = Enum.Font.GothamBold
+csTitleLbl.TextSize               = 17
+csTitleLbl.TextColor3             = CS_ACCENT
+csTitleLbl.TextXAlignment         = Enum.TextXAlignment.Center
+csTitleLbl.Text                   = "COMING SOON"
+csTitleLbl.ZIndex                 = 5
+
+-- Accent line
+local accentLine = Instance.new("Frame", csOuter)
+accentLine.Size             = UDim2.new(0, 56, 0, 2)
+accentLine.AnchorPoint      = Vector2.new(0.5, 0)
+accentLine.Position         = UDim2.new(0.5, 0, 0, 105)
+accentLine.BackgroundColor3 = CS_DIM
+accentLine.BorderSizePixel  = 0
+accentLine.ZIndex           = 5
+corner(accentLine, 1)
+
+-- Subtitle
+local csSubLbl = Instance.new("TextLabel", csOuter)
+csSubLbl.Size                   = UDim2.new(1, -20, 0, 14)
+csSubLbl.Position               = UDim2.new(0, 10, 0, 112)
+csSubLbl.BackgroundTransparency = 1
+csSubLbl.Font                   = Enum.Font.GothamSemibold
+csSubLbl.TextSize               = 10
+csSubLbl.TextColor3             = CS_DIMMER
+csSubLbl.TextXAlignment         = Enum.TextXAlignment.Center
+csSubLbl.Text                   = "WOOD TAB  —  UNDER DEVELOPMENT"
+csSubLbl.ZIndex                 = 5
+
+-- Description
+local csDescLbl = Instance.new("TextLabel", csOuter)
+csDescLbl.Size                   = UDim2.new(1, -24, 0, 36)
+csDescLbl.Position               = UDim2.new(0, 12, 0, 130)
+csDescLbl.BackgroundTransparency = 1
+csDescLbl.Font                   = Enum.Font.Gotham
+csDescLbl.TextSize               = 10
+csDescLbl.TextColor3             = CS_DIMMER
+csDescLbl.TextXAlignment         = Enum.TextXAlignment.Center
+csDescLbl.TextWrapped            = true
+csDescLbl.Text                   = "Being rebuilt with improved tree cutting,\nsmarter log dragging & reliable sell logic."
+csDescLbl.ZIndex                 = 5
+
+-- Status pill
+local statusPill = Instance.new("Frame", csOuter)
+statusPill.Size             = UDim2.new(0, 148, 0, 20)
+statusPill.AnchorPoint      = Vector2.new(0.5, 0)
+statusPill.Position         = UDim2.new(0.5, 0, 0, 172)
+statusPill.BackgroundColor3 = CS_CARD
+statusPill.BorderSizePixel  = 0
+statusPill.ZIndex           = 5
+corner(statusPill, 10)
+
+local pillStroke = Instance.new("UIStroke", statusPill)
+pillStroke.Color        = CS_DIMMER
+pillStroke.Thickness    = 1
+pillStroke.Transparency = 0.4
+
+local pulseDot = Instance.new("Frame", statusPill)
+pulseDot.Size             = UDim2.new(0, 6, 0, 6)
+pulseDot.Position         = UDim2.new(0, 10, 0.5, -3)
+pulseDot.BackgroundColor3 = CS_ACCENT
+pulseDot.BorderSizePixel  = 0
+pulseDot.ZIndex           = 6
+corner(pulseDot, 3)
+
+local pillLbl = Instance.new("TextLabel", statusPill)
+pillLbl.Size                   = UDim2.new(1, -24, 1, 0)
+pillLbl.Position               = UDim2.new(0, 22, 0, 0)
+pillLbl.BackgroundTransparency = 1
+pillLbl.Font                   = Enum.Font.GothamSemibold
+pillLbl.TextSize               = 10
+pillLbl.TextColor3             = CS_DIM
+pillLbl.TextXAlignment         = Enum.TextXAlignment.Left
+pillLbl.Text                   = "In Development  •  v0.0"
+pillLbl.ZIndex                 = 6
+
+-- ── Animations ───────────────────────────────────────────────────────────────
+
 task.spawn(function()
-    local colors = {
+    while true do
+        TweenService:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundTransparency = 0.75
+        }):Play()
+        task.wait(0.9)
+        TweenService:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundTransparency = 0
+        }):Play()
+        task.wait(0.9)
+    end
+end)
+
+task.spawn(function()
+    local cols = {
         Color3.fromRGB(100, 85, 105),
         Color3.fromRGB(120, 100, 130),
         Color3.fromRGB(80,  68,  90),
         Color3.fromRGB(110, 90, 118),
     }
     local i = 1
-    while csCard and csCard.Parent do
-        TweenService:Create(csStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Color = colors[i]
+    while true do
+        local nx = i % #cols + 1
+        TweenService:Create(csBorderStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Color = cols[nx]
         }):Play()
-        i = (i % #colors) + 1
+        i = nx
         task.wait(2)
     end
 end)
 
--- Glow blob behind circle
-local glowBlob = Instance.new("Frame", csCard)
-glowBlob.Size                   = UDim2.new(0, 80, 0, 80)
-glowBlob.Position               = UDim2.new(0.5, -40, 0, 52)
-glowBlob.BackgroundColor3       = Color3.fromRGB(100, 80, 110)
-glowBlob.BackgroundTransparency = 0.68
-glowBlob.BorderSizePixel        = 0
-glowBlob.ZIndex                 = 2
-corner(glowBlob, 40)
-
 task.spawn(function()
-    while glowBlob and glowBlob.Parent do
-        TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -40, 0, 60)
+    while true do
+        TweenService:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 18)
         }):Play()
         task.wait(1.4)
-        TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -40, 0, 52)
+        TweenService:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 26)
         }):Play()
         task.wait(1.4)
     end
 end)
 
--- Floating circle (no text, no emoji)
-local floatCircle = Instance.new("Frame", csCard)
-floatCircle.Size             = UDim2.new(0, 46, 0, 46)
-floatCircle.Position         = UDim2.new(0.5, -23, 0, 62)
-floatCircle.BackgroundColor3 = Color3.fromRGB(22, 19, 25)
-floatCircle.BorderSizePixel  = 0
-floatCircle.ZIndex           = 3
-corner(floatCircle, 23)
-
-local circleStroke = Instance.new("UIStroke", floatCircle)
-circleStroke.Color     = Color3.fromRGB(160, 138, 157)
-circleStroke.Thickness = 1.5
-
 task.spawn(function()
-    while floatCircle and floatCircle.Parent do
-        TweenService:Create(floatCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -23, 0, 70)
+    while true do
+        TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 12)
         }):Play()
         task.wait(1.4)
-        TweenService:Create(floatCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            Position = UDim2.new(0.5, -23, 0, 62)
+        TweenService:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 20)
         }):Play()
         task.wait(1.4)
     end
