@@ -11,6 +11,7 @@
 --   7. Player teleports back to origin after each item
 --   8. Network ownership verified via ReceiveAge
 --   9. Entire buy flow wrapped in pcall for stability
+--  10. AutoBuy tab replaced with Coming Soon / Under Development screen
 -- ════════════════════════════════════════════════════
 
 if not _G.VH then
@@ -364,377 +365,231 @@ local function makeFancyDropdown(page, labelText, getOptions, cb)
 end
 
 -- ════════════════════════════════════════════════════
--- AUTOBUY CORE — COMPLETE REWRITE
--- ════════════════════════════════════════════════════
-
--- Shop ID map: store model name → NPC dialog ID
-local ShopIDS = {
-    WoodRUs       = 7,
-    FurnitureStore= 8,
-    FineArt       = 11,
-    CarStore      = 9,
-    LogicStore    = 12,
-    ShackShop     = 10,
-}
-
--- Check if WE have network ownership of a part (ReceiveAge == 0)
-local function hasNetOwnership(part)
-    local ok, v = pcall(function() return part.ReceiveAge == 0 end)
-    return ok and v
-end
-
--- Get item price from ClientItemInfo
-local function GetPrice(itemName)
-    for _, v in ipairs(RS.ClientItemInfo:GetDescendants()) do
-        if v.Name == itemName and v:FindFirstChild("Price") then
-            return v.Price.Value
-        end
-    end
-    return 0
-end
-
--- Scan all shop items that are unowned
-local function GrabShopItems()
-    local out, seen = {}, {}
-    for _, v in ipairs(workspace.Stores:GetDescendants()) do
-        if v:IsA("Model")
-           and v:FindFirstChild("BoxItemName")
-           and v:FindFirstChild("Owner") and v.Owner.Value == nil then
-            -- Filter out blueprints
-            local typeVal = v:FindFirstChild("Type")
-            if not (typeVal and typeVal.Value == "Blueprint") then
-                local name = v.BoxItemName.Value
-                if not seen[name] then
-                    seen[name] = true
-                    local price = GetPrice(name)
-                    table.insert(out, name .. " - $" .. price)
-                end
-            end
-        end
-    end
-    table.sort(out)
-    return #out > 0 and out or {"(no items found)"}
-end
-
--- FIX 1: Find a shop item by name string properly
-local function findShopItem(itemName)
-    for _, v in ipairs(workspace.Stores:GetDescendants()) do
-        if v:IsA("Model") and v:FindFirstChild("BoxItemName") then
-            -- FIX: compare .Value (string) to itemName (string)
-            if v.BoxItemName.Value == itemName then
-                local ownerVal = v:FindFirstChild("Owner")
-                if ownerVal and ownerVal.Value == nil then
-                    return v
-                end
-            end
-        end
-    end
-    return nil
-end
-
--- FIX 2: Get nearest counter with NO distance cap
-local function GetCounter(itemModel)
-    local mainPart = itemModel:FindFirstChild("Main") or itemModel:FindFirstChildWhichIsA("BasePart")
-    if not mainPart then return nil, nil end
-    local best, bestDist, bestStore = nil, math.huge, nil
-    for _, store in ipairs(workspace.Stores:GetChildren()) do
-        for _, child in ipairs(store:GetChildren()) do
-            -- Match any part named "Counter" or "counter"
-            if child.Name:lower() == "counter" and child:IsA("BasePart") then
-                local d = (mainPart.Position - child.Position).Magnitude
-                if d < bestDist then
-                    bestDist = d
-                    best = child
-                    bestStore = store.Name
-                end
-            end
-        end
-    end
-    return best, bestStore
-end
-
--- Invoke the NPC dialog purchase confirm
-local function Pay(ID)
-    pcall(function()
-        RS.NPCDialog.PlayerChatted:InvokeServer(
-            {ID = ID, Character = "name", Name = "name", Dialog = "Dialog"},
-            "ConfirmPurchase"
-        )
-    end)
-end
-
--- Get blueprints player is missing
-local function getMissingBlueprints()
-    local out = {}
-    for _, v in ipairs(RS.ClientItemInfo:GetChildren()) do
-        if v:FindFirstChild("Type")
-           and (v.Type.Value == "Structure" or v.Type.Value == "Furniture")
-           and v:FindFirstChild("WoodCost")
-           and not LP.PlayerBlueprints.Blueprints:FindFirstChild(v.Name) then
-            table.insert(out, v.Name)
-        end
-    end
-    return out
-end
-
-local AbortAutoBuy = false
-
--- ════════════════════════════════════════════════════
--- MAIN AutoBuy FUNCTION — FULL REWRITE
--- ════════════════════════════════════════════════════
-
-local function AutoBuy(itemName, amount, doOpenBox, prog, stat)
-    if not itemName or itemName == "" or itemName == "(no items found)" then
-        if stat then stat.SetActive(false, "No item selected!") end
-        return
-    end
-
-    local price = GetPrice(itemName)
-    if LP.leaderstats and LP.leaderstats.Money and LP.leaderstats.Money.Value < price then
-        if stat then stat.SetActive(false, "Need $"..price.." (have $"..LP.leaderstats.Money.Value..")") end
-        return
-    end
-
-    AbortAutoBuy = false
-    local hrp    = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    local origin = hrp and hrp.CFrame or CFrame.new(0,5,0)
-
-    if stat then stat.SetActive(true, "Buying: "..itemName) end
-    if prog then prog.Set(0, amount, "Starting...") end
-
-    for i = 1, amount do
-        if AbortAutoBuy then break end
-
-        -- ── Step 1: Wait for unowned item to appear in shop ──
-        if stat then stat.SetActive(true, "Waiting for item "..i.."/"..amount.."...") end
-        local item      = nil
-        local waitStart = tick()
-        repeat
-            task.wait(0.12)
-            item = findShopItem(itemName)
-        until item or AbortAutoBuy or (tick() - waitStart > 30)
-
-        if AbortAutoBuy then break end
-        if not item then
-            if stat then stat.SetActive(false, "Item '"..itemName.."' not found in shop.") end
-            break
-        end
-
-        -- ── Step 2: Get main part ──
-        local mainPart = item:FindFirstChild("Main") or item:FindFirstChildWhichIsA("BasePart")
-        if not mainPart then
-            if stat then stat.SetActive(true, "Skipping (no main part)") end
-            if prog then prog.Set(i, amount, "Skipped "..i.."/"..amount) end
-            task.wait(0.5)
-            continue
-        end
-
-        -- ── Step 3: Find nearest counter + get shop ID ──
-        local counter, storeName = GetCounter(item)
-        if not counter then
-            if stat then stat.SetActive(false, "No counter found near item.") end
-            task.wait(1)
-            continue
-        end
-        local shopID = ShopIDS[storeName]
-
-        -- ── Step 4: Teleport next to item, grab ownership ──
-        local h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if not h then break end
-
-        -- Teleport to item
-        h.CFrame = mainPart.CFrame * CFrame.new(3, 1, 3)
-        task.wait(0.15)
-
-        -- Rapidly fire drag to claim ownership (FIX 3: proper timeout + rapid spam)
-        if stat then stat.SetActive(true, "Grabbing item "..i.."...") end
-        local grabT = tick()
-        repeat
-            pcall(function()
-                RS.Interaction.ClientIsDragging:FireServer(item)
-                RS.Interaction.ClientIsDragging:FireServer(item)
-                RS.Interaction.ClientIsDragging:FireServer(item)
-            end)
-            task.wait(0.04)
-            -- Re-check character still valid
-            h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if not h then break end
-            -- Keep player near item while grabbing
-            if (h.Position - mainPart.Position).Magnitude > 15 then
-                h.CFrame = mainPart.CFrame * CFrame.new(3,1,3)
-            end
-        until AbortAutoBuy
-           or (tick() - grabT > 8)
-           or not item.Parent
-           or (item:FindFirstChild("Owner") and item.Owner.Value == LP)
-
-        if AbortAutoBuy or not item.Parent then break end
-
-        -- ── Step 5: Claim network ownership ──
-        local netT = tick()
-        repeat
-            pcall(function() RS.Interaction.ClientIsDragging:FireServer(item) end)
-            task.wait(0.04)
-        until hasNetOwnership(mainPart) or (tick() - netT > 5) or not item.Parent or AbortAutoBuy
-
-        -- ── Step 6: Place item on top of counter (FIX 4: correct height) ──
-        local halfItem    = mainPart.Size.Y / 2
-        local halfCounter = counter.Size.Y / 2
-        local placeCF = CFrame.new(
-            counter.Position.X,
-            counter.Position.Y + halfCounter + halfItem + 0.05,
-            counter.Position.Z
-        )
-
-        if stat then stat.SetActive(true, "Placing on counter "..i.."...") end
-
-        -- Move player to counter
-        h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if h then h.CFrame = counter.CFrame * CFrame.new(3, 1, 3) end
-        task.wait(0.1)
-
-        -- Place item aggressively
-        local placeT = tick()
-        repeat
-            pcall(function()
-                RS.Interaction.ClientIsDragging:FireServer(item)
-                mainPart.CFrame = placeCF
-            end)
-            task.wait(0.03)
-        until (tick()-placeT > 1) or not item.Parent or AbortAutoBuy
-
-        if AbortAutoBuy or not item.Parent then break end
-
-        -- ── Step 7: Pay loop (FIX 5 + 6: correct exit condition) ──
-        if stat then stat.SetActive(true, "Paying for item "..i.."...") end
-        if not shopID then
-            -- Try to infer shop ID by scanning for nearest NPC
-            warn("[VH] No ShopID for store: "..(storeName or "?").." — attempting pay anyway")
-            for _, id in pairs(ShopIDS) do shopID = id; break end
-        end
-
-        local payT = tick()
-        repeat
-            if AbortAutoBuy then break end
-            pcall(function()
-                RS.Interaction.ClientIsDragging:FireServer(item)
-                mainPart.CFrame = placeCF
-            end)
-            if shopID then Pay(shopID) end
-            task.wait(0.06)
-            -- FIX 5: item bought when it leaves workspace.Stores (Parent changes)
-        until not item.Parent
-           or (item.Parent ~= nil and item.Parent.Name ~= "ShopItems")
-           or (tick() - payT > 20)
-           or AbortAutoBuy
-
-        -- ── Step 8: Move bought item back to origin (FIX 7) ──
-        if item.Parent and item.Parent ~= workspace.Stores then
-            task.spawn(function()
-                pcall(function()
-                    -- Re-get network ownership of purchased item
-                    local t2 = tick()
-                    repeat
-                        RS.Interaction.ClientIsDragging:FireServer(item)
-                        task.wait(0.04)
-                    until hasNetOwnership(mainPart) or (tick()-t2 > 3) or not item.Parent
-
-                    if item.Parent then
-                        RS.Interaction.ClientIsDragging:FireServer(item)
-                        mainPart.CFrame = origin * CFrame.new(0, 2, 0)
-                        task.wait(0.1)
-                        if doOpenBox then
-                            RS.Interaction.ClientInteracted:FireServer(item, "Open box")
-                        end
-                    end
-                end)
-            end)
-        end
-
-        -- FIX 7: return to origin after EACH item
-        h = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-        if h then h.CFrame = origin * CFrame.new(0, 1, 0) end
-
-        if prog then prog.Set(i, amount, "Bought "..i.." / "..amount) end
-        task.wait(0.5)
-    end
-
-    -- Final return home
-    local hFinal = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if hFinal then hFinal.CFrame = origin * CFrame.new(0, 1, 0) end
-
-    if stat then stat.SetActive(false, AbortAutoBuy and "Aborted." or "Done! Bought "..amount.." item(s).") end
-    if prog then prog.Set(amount, amount, AbortAutoBuy and "Aborted" or "Complete!") end
-end
-
--- ════════════════════════════════════════════════════
--- AUTOBUY TAB UI
+-- AUTOBUY TAB — COMING SOON / UNDER DEVELOPMENT SCREEN
 -- ════════════════════════════════════════════════════
 
 local ab = pages["AutoBuyTab"]
 
-sectionLabel(ab, "Item Selection")
+-- ── Outer container that fills the tab ──────────────────────────────────────
+local csOuter = Instance.new("Frame", ab)
+csOuter.Size             = UDim2.new(1, -12, 0, 310)
+csOuter.BackgroundColor3 = Color3.fromRGB(14, 13, 20)
+csOuter.BorderSizePixel  = 0
+corner(csOuter, 14)
 
-local shopCache = GrabShopItems()
-local itemToBuy = nil
-local buyAmount = 1
-local openBox   = false
+-- Animated gradient border via UIStroke
+local csBorderStroke = Instance.new("UIStroke", csOuter)
+csBorderStroke.Color       = Color3.fromRGB(90, 60, 140)
+csBorderStroke.Thickness   = 1.5
+csBorderStroke.Transparency = 0
 
-local shopDD = makeFancyDropdown(ab, "Item", function() return shopCache end, function(val)
-    -- Strip the " - $xxx" suffix to get the clean item name
-    itemToBuy = val:match("^(.-)%s*%-%s*%$") or val
-end)
+-- Subtle inner grid pattern (decorative Frame rows)
+for row = 0, 5 do
+    local gridLine = Instance.new("Frame", csOuter)
+    gridLine.Size             = UDim2.new(1, 0, 0, 1)
+    gridLine.Position         = UDim2.new(0, 0, 0, 30 + row * 48)
+    gridLine.BackgroundColor3 = Color3.fromRGB(30, 28, 42)
+    gridLine.BorderSizePixel  = 0
+    gridLine.ZIndex           = 1
+end
+for col = 0, 4 do
+    local gridCol = Instance.new("Frame", csOuter)
+    gridCol.Size             = UDim2.new(0, 1, 1, 0)
+    gridCol.Position         = UDim2.new(0, 40 + col * 58, 0, 0)
+    gridCol.BackgroundColor3 = Color3.fromRGB(30, 28, 42)
+    gridCol.BorderSizePixel  = 0
+    gridCol.ZIndex           = 1
+end
 
-sectionLabel(ab, "Options")
-makeSlider(ab, "Amount", 1, 100, 1, function(v) buyAmount = v end)
-makeToggle(ab, "Open Box After Buying", false, function(v) openBox = v end)
-sep(ab)
+-- Radial glow blob behind lock icon (decorative)
+local glowBlob = Instance.new("Frame", csOuter)
+glowBlob.Size             = UDim2.new(0, 120, 0, 120)
+glowBlob.AnchorPoint      = Vector2.new(0.5, 0)
+glowBlob.Position         = UDim2.new(0.5, 0, 0, 28)
+glowBlob.BackgroundColor3 = Color3.fromRGB(70, 40, 120)
+glowBlob.BorderSizePixel  = 0
+glowBlob.BackgroundTransparency = 0.72
+glowBlob.ZIndex           = 2
+corner(glowBlob, 60)
 
-local abStat = makeStatus(ab, "Idle")
-local abProg = makeProgress(ab)
+-- Lock icon circle backdrop
+local lockCircle = Instance.new("Frame", csOuter)
+lockCircle.Size             = UDim2.new(0, 64, 0, 64)
+lockCircle.AnchorPoint      = Vector2.new(0.5, 0)
+lockCircle.Position         = UDim2.new(0.5, 0, 0, 38)
+lockCircle.BackgroundColor3 = Color3.fromRGB(26, 22, 40)
+lockCircle.BorderSizePixel  = 0
+lockCircle.ZIndex           = 3
+corner(lockCircle, 32)
+local lockCircleStroke = Instance.new("UIStroke", lockCircle)
+lockCircleStroke.Color      = Color3.fromRGB(110, 70, 180)
+lockCircleStroke.Thickness  = 2
+lockCircleStroke.Transparency = 0
 
-makeButton(ab, "↻  Refresh Item List", function()
-    shopCache = GrabShopItems()
-    shopDD.Refresh()
-    abStat.SetActive(false, "Refreshed "..#shopCache.." items.")
-end)
+-- Lock icon label
+local lockIcon = Instance.new("TextLabel", lockCircle)
+lockIcon.Size               = UDim2.new(1, 0, 1, 0)
+lockIcon.BackgroundTransparency = 1
+lockIcon.Text               = "🔒"
+lockIcon.Font               = Enum.Font.GothamBold
+lockIcon.TextSize            = 28
+lockIcon.TextXAlignment      = Enum.TextXAlignment.Center
+lockIcon.TextYAlignment      = Enum.TextYAlignment.Center
+lockIcon.ZIndex              = 4
 
-makeButton(ab, "Purchase Selected Item(s)", function()
-    if not itemToBuy then
-        abStat.SetActive(false, "Select an item first!")
-        return
+-- "COMING SOON" large label
+local csTitleLbl = Instance.new("TextLabel", csOuter)
+csTitleLbl.Size               = UDim2.new(1, -16, 0, 30)
+csTitleLbl.Position           = UDim2.new(0, 8, 0, 112)
+csTitleLbl.BackgroundTransparency = 1
+csTitleLbl.Font               = Enum.Font.GothamBold
+csTitleLbl.TextSize            = 22
+csTitleLbl.TextColor3          = Color3.fromRGB(210, 185, 255)
+csTitleLbl.TextXAlignment      = Enum.TextXAlignment.Center
+csTitleLbl.Text                = "COMING SOON"
+csTitleLbl.ZIndex              = 5
+
+-- Thin accent line under title
+local accentLine = Instance.new("Frame", csOuter)
+accentLine.Size             = UDim2.new(0, 80, 0, 2)
+accentLine.AnchorPoint      = Vector2.new(0.5, 0)
+accentLine.Position         = UDim2.new(0.5, 0, 0, 146)
+accentLine.BackgroundColor3 = Color3.fromRGB(130, 80, 210)
+accentLine.BorderSizePixel  = 0
+accentLine.ZIndex           = 5
+corner(accentLine, 1)
+
+-- Sub-label
+local csSubLbl = Instance.new("TextLabel", csOuter)
+csSubLbl.Size               = UDim2.new(1, -24, 0, 18)
+csSubLbl.Position           = UDim2.new(0, 12, 0, 154)
+csSubLbl.BackgroundTransparency = 1
+csSubLbl.Font               = Enum.Font.GothamSemibold
+csSubLbl.TextSize            = 12
+csSubLbl.TextColor3          = Color3.fromRGB(120, 100, 155)
+csSubLbl.TextXAlignment      = Enum.TextXAlignment.Center
+csSubLbl.Text                = "AUTO BUY  —  UNDER DEVELOPMENT"
+csSubLbl.ZIndex              = 5
+
+-- Description block
+local csDescLbl = Instance.new("TextLabel", csOuter)
+csDescLbl.Size               = UDim2.new(1, -28, 0, 52)
+csDescLbl.Position           = UDim2.new(0, 14, 0, 180)
+csDescLbl.BackgroundTransparency = 1
+csDescLbl.Font               = Enum.Font.Gotham
+csDescLbl.TextSize            = 11
+csDescLbl.TextColor3          = Color3.fromRGB(90, 80, 115)
+csDescLbl.TextXAlignment      = Enum.TextXAlignment.Center
+csDescLbl.TextWrapped         = true
+csDescLbl.Text                = "The AutoBuy system is being rebuilt from the ground up with improved bypass logic, smarter counter detection, and network ownership handling. Check back for the next update."
+csDescLbl.ZIndex              = 5
+
+-- Status pill row
+local statusPill = Instance.new("Frame", csOuter)
+statusPill.Size             = UDim2.new(0, 160, 0, 24)
+statusPill.AnchorPoint      = Vector2.new(0.5, 0)
+statusPill.Position         = UDim2.new(0.5, 0, 0, 240)
+statusPill.BackgroundColor3 = Color3.fromRGB(20, 16, 32)
+statusPill.BorderSizePixel  = 0
+statusPill.ZIndex           = 5
+corner(statusPill, 12)
+local statusPillStroke = Instance.new("UIStroke", statusPill)
+statusPillStroke.Color      = Color3.fromRGB(70, 50, 110)
+statusPillStroke.Thickness  = 1
+statusPillStroke.Transparency = 0.3
+
+-- Pulsing dot inside pill
+local pulseDot = Instance.new("Frame", statusPill)
+pulseDot.Size             = UDim2.new(0, 7, 0, 7)
+pulseDot.Position         = UDim2.new(0, 12, 0.5, -3)
+pulseDot.BackgroundColor3 = Color3.fromRGB(150, 80, 230)
+pulseDot.BorderSizePixel  = 0
+pulseDot.ZIndex           = 6
+corner(pulseDot, 4)
+
+local pillLbl = Instance.new("TextLabel", statusPill)
+pillLbl.Size               = UDim2.new(1, -28, 1, 0)
+pillLbl.Position           = UDim2.new(0, 26, 0, 0)
+pillLbl.BackgroundTransparency = 1
+pillLbl.Font               = Enum.Font.GothamSemibold
+pillLbl.TextSize            = 11
+pillLbl.TextColor3          = Color3.fromRGB(140, 100, 200)
+pillLbl.TextXAlignment      = Enum.TextXAlignment.Left
+pillLbl.Text                = "In Development  •  v0.0"
+pillLbl.ZIndex              = 6
+
+-- Version tag (bottom-right corner of card)
+local verLbl = Instance.new("TextLabel", csOuter)
+verLbl.Size               = UDim2.new(0, 80, 0, 16)
+verLbl.Position           = UDim2.new(1, -88, 1, -22)
+verLbl.BackgroundTransparency = 1
+verLbl.Font               = Enum.Font.Gotham
+verLbl.TextSize            = 10
+verLbl.TextColor3          = Color3.fromRGB(55, 48, 75)
+verLbl.TextXAlignment      = Enum.TextXAlignment.Right
+verLbl.Text                = "VanillaHub  •  v6"
+verLbl.ZIndex              = 5
+
+-- ── Animate the pulsing dot (transparency pulse) ────────────────────────────
+task.spawn(function()
+    while true do
+        TS:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundTransparency = 0.7
+        }):Play()
+        task.wait(0.9)
+        TS:Create(pulseDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundTransparency = 0
+        }):Play()
+        task.wait(0.9)
     end
-    task.spawn(AutoBuy, itemToBuy, buyAmount, openBox, abProg, abStat)
 end)
 
-makeButton(ab, "⏹  Abort", function()
-    AbortAutoBuy = true
-    abStat.SetActive(false, "Aborted.")
-end)
-
-sep(ab)
-sectionLabel(ab, "Quick Purchases")
-
-makeButton(ab, "Buy All Missing Blueprints", function()
-    local bps = getMissingBlueprints()
-    if #bps == 0 then
-        abStat.SetActive(false, "No blueprints missing!")
-        return
+-- ── Animate the border stroke color cycling purple → blue → purple ──────────
+task.spawn(function()
+    local colors = {
+        Color3.fromRGB(110, 60, 180),
+        Color3.fromRGB(70, 90, 200),
+        Color3.fromRGB(130, 50, 170),
+        Color3.fromRGB(80, 60, 160),
+    }
+    local i = 1
+    while true do
+        local next = i % #colors + 1
+        TS:Create(csBorderStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Color = colors[next]
+        }):Play()
+        i = next
+        task.wait(2)
     end
-    abStat.SetActive(true, "Buying "..#bps.." blueprints...")
-    task.spawn(function()
-        for idx, v in ipairs(bps) do
-            if AbortAutoBuy then break end
-            abStat.SetActive(true, "Blueprint "..idx.."/"..#bps..": "..v)
-            AutoBuy(v, 1, true, abProg, nil)
-        end
-        abStat.SetActive(false, AbortAutoBuy and "Aborted." or "All blueprints done!")
-    end)
 end)
 
-makeButton(ab, "Pay Toll Bridge",    function() Pay(15) end)
-makeButton(ab, "Buy Ferry Ticket",   function() Pay(13) end)
-makeButton(ab, "Buy Power of Ease",  function() Pay(3)  end)
+-- ── Animate the lock icon gently bobbing ────────────────────────────────────
+task.spawn(function()
+    while true do
+        TS:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 34)
+        }):Play()
+        task.wait(1.4)
+        TS:Create(lockCircle, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 42)
+        }):Play()
+        task.wait(1.4)
+    end
+end)
+
+-- ── Animate glow blob synced with lock bob ───────────────────────────────────
+task.spawn(function()
+    while true do
+        TS:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 24)
+        }):Play()
+        task.wait(1.4)
+        TS:Create(glowBlob, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            Position = UDim2.new(0.5, 0, 0, 32)
+        }):Play()
+        task.wait(1.4)
+    end
+end)
 
 -- ════════════════════════════════════════════════════
 -- SLOT TAB
@@ -836,12 +691,10 @@ local function showSavePopup()
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Text = "Saved Successfully!"
 
-    -- Slide in
     TS:Create(frame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Position = UDim2.new(0.5, 0, 0, 18)
     }):Play()
 
-    -- Slide out and destroy after 2.5s
     task.delay(2.5, function()
         TS:Create(frame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(0.5, 0, 0, -60)
@@ -866,7 +719,6 @@ local function forceSave()
 
     local originCF = hrp.CFrame
 
-    -- Find our plot origin so we can park vehicles on it
     local plotCF = nil
     for _, v in ipairs(workspace.Properties:GetChildren()) do
         if v:FindFirstChild("Owner") and v.Owner.Value == LP
@@ -877,16 +729,11 @@ local function forceSave()
     end
 
     if not plotCF then
-        -- No plot found — just do a plain save of what we can
         pcall(function() RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP) end)
         showSavePopup()
         return
     end
 
-    -- ── Step 1: Move every owned vehicle onto the plot and claim ownership ──
-    -- The LT2 server only saves vehicles whose position is inside the plot bounds.
-    -- We teleport each vehicle to the plot origin, grab network ownership via
-    -- drag-spam, then leave it there while we fire RequestSave.
     local vehicleOriginalCFrames = {}
 
     for _, v in ipairs(workspace.PlayerModels:GetChildren()) do
@@ -895,14 +742,11 @@ local function forceSave()
             if typeVal and typeVal.Value == "Vehicle" then
                 local root = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
                 if root then
-                    -- Remember original position so we can restore after
                     vehicleOriginalCFrames[v] = root.CFrame
 
-                    -- Teleport player next to vehicle first
                     hrp.CFrame = root.CFrame * CFrame.new(5, 1, 0)
                     task.wait(0.1)
 
-                    -- Grab network ownership
                     local t = tick()
                     repeat
                         pcall(function()
@@ -913,7 +757,6 @@ local function forceSave()
                         task.wait(0.03)
                     until (tick() - t > 2) or (root.ReceiveAge == 0)
 
-                    -- Move vehicle onto plot (offset each one slightly so they don't stack)
                     local idx = 0
                     for _ in pairs(vehicleOriginalCFrames) do idx = idx + 1 end
                     local offset = Vector3.new((idx - 1) * 8, 2, 0)
@@ -927,7 +770,6 @@ local function forceSave()
                         end
                     end)
 
-                    -- Hold it there briefly
                     for _ = 1, 10 do
                         pcall(function()
                             RS.Interaction.ClientIsDragging:FireServer(v)
@@ -944,7 +786,6 @@ local function forceSave()
         end
     end
 
-    -- ── Step 2: Teleport player to plot and fire RequestSave ──
     hrp.CFrame = plotCF + Vector3.new(0, 3, 0)
     task.wait(0.2)
 
@@ -954,14 +795,12 @@ local function forceSave()
 
     task.wait(0.5)
 
-    -- Fire again as safety net
     pcall(function()
         RS.LoadSaveRequests.RequestSave:InvokeServer(slot, LP)
     end)
 
     task.wait(0.3)
 
-    -- ── Step 3: Move vehicles back to their original positions ──
     for v, originalCF in pairs(vehicleOriginalCFrames) do
         local root = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart")
         if root and v.Parent then
@@ -977,7 +816,6 @@ local function forceSave()
         end
     end
 
-    -- ── Step 4: Return player home ──
     hrp.CFrame = originCF
 
     print("[VH] Force saved slot " .. tostring(slot))
@@ -1004,7 +842,7 @@ end
 sectionLabel(sl, "Fast Load")
 makeSlider(sl, "Slot Number", 1, 6, 1, function(v) slotNum = v end)
 makeButton(sl, "Load Base",                   function() loadSlot(slotNum) end)
-makeButton(sl, "💾  Force Save",               function() forceSave() end)
+makeButton(sl, "Force Save",                  function() forceSave() end)
 
 sep(sl)
 sectionLabel(sl, "Land Management")
@@ -1046,8 +884,7 @@ end)
 -- ════════════════════════════════════════════════════
 
 table.insert(VH.cleanupTasks, function()
-    AbortAutoBuy = true
     if landHL then pcall(function() landHL:Destroy() end) end
 end)
 
-print("[VanillaHub] Vanilla6 REWRITE loaded — AutoBuy + Slot")
+print("[VanillaHub] Vanilla6 loaded — Slot Tab + AutoBuy Coming Soon")
