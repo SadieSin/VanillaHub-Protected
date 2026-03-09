@@ -897,8 +897,9 @@ local function HandleClickSelection()
 end
 
 -- ── Group selection ────────────────────────────────────────────────────────
--- Clicks a model → reads its ItemName and Owner → selects every model
--- inside PlayerModels that shares BOTH values exactly.
+-- Clicks a model → reads its ItemName StringValue exactly → selects every
+-- model inside PlayerModels that has the EXACT same ItemName StringValue.
+-- Falls back to single-select if the clicked model has no ItemName.
 local function HandleGroupSelection()
     local target = mouse.Target
     if not target then return end
@@ -913,20 +914,38 @@ local function HandleGroupSelection()
     end
     if not model then return end
 
-    local clickedName  = itemName(model)
-    local clickedOwner = ownerKey(model)   -- may be nil if no Owner value
+    -- Require an explicit ItemName StringValue for group matching.
+    -- If the clicked model has no ItemName (or it's blank), treat it as
+    -- ungroupable and just select that single model.
+    local clickedIV = model:FindFirstChild("ItemName")
+    local clickedItemName = (clickedIV and clickedIV:IsA("StringValue") and clickedIV.Value ~= "")
+                            and clickedIV.Value
+                            or nil
+
+    if not clickedItemName then
+        -- No ItemName — fall back to single-click selection only
+        highlightModel(model)
+        return
+    end
+
+    local clickedOwner = ownerKey(model)
 
     for _, obj in ipairs(pm:GetChildren()) do
-        if obj:IsA("Model") then
-            -- Name must match
-            if itemName(obj) ~= clickedName then continue end
-            -- Owner must match (both nil = no owner info, still match)
-            local objOwner = ownerKey(obj)
-            if clickedOwner ~= nil and objOwner ~= nil then
-                if clickedOwner ~= objOwner then continue end
-            end
-            highlightModel(obj)
+        if not obj:IsA("Model") then continue end
+
+        -- Must have an ItemName StringValue with the EXACT same value
+        local objIV = obj:FindFirstChild("ItemName")
+        local objItemName = (objIV and objIV:IsA("StringValue") and objIV.Value ~= "")
+                            and objIV.Value
+                            or nil
+        if objItemName ~= clickedItemName then continue end
+
+        -- Owner must match when both are known; skip the check if either is nil
+        if clickedOwner ~= nil and ownerKey(obj) ~= nil then
+            if ownerKey(obj) ~= clickedOwner then continue end
         end
+
+        highlightModel(obj)
     end
 end
 
