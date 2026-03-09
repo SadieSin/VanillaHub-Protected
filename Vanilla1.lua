@@ -777,38 +777,46 @@ local BTN_COLOR = Color3.fromRGB(45, 45, 50)
 local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 
 -- ════════════════════════════════════════════════════
--- SELECTION SYSTEM
+-- ITEM FILTER  (ported from Vanilla4 / Sorter)
+--
+-- A model is "selectable" only if it is a genuine player-owned / draggable
+-- item. Trees (TreeClass), land, ground, and static world objects are
+-- explicitly excluded.  The check mirrors Vanilla4's isSortableItem().
 -- ════════════════════════════════════════════════════
-local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
-
--- Returns the PlayerModels folder, or nil if it doesn't exist yet
-local function getPlayerModels()
-    return workspace:FindFirstChild("PlayerModels")
-end
-
--- ── Sortable item guard ────────────────────────────────────────────────────
--- Blocks trees (TreeClass) and anything without a BasePart.
--- Everything else inside PlayerModels is fair game — we do NOT require
--- Owner/ItemName/etc on the root because many LT2 items store those on
--- child parts or sub-models, which would cause false negatives.
 local function isSortableItem(model)
     if not model or not model:IsA("Model") then return false end
     if model == workspace then return false end
-    -- Must have at least one BasePart somewhere
-    if not (model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")) then
-        return false
-    end
-    -- Block trees
+    -- Must have at least one BasePart to interact with
+    local mp = model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
+    if not mp then return false end
+    -- Trees are NOT selectable
     if model:FindFirstChild("TreeClass") then return false end
-    -- Block raw land plots (they have a "Lot" value but no draggable marker anywhere)
-    if model:FindFirstChild("Lot") and not model:FindFirstChild("Owner")
-    and not model:FindFirstChildWhichIsA("Tool") then
-        return false
-    end
-    return true
+    -- Must be a genuine owned/draggable/purchasable item
+    return model:FindFirstChild("Owner") ~= nil
+        or model:FindFirstChild("PurchasedBoxItemName") ~= nil
+        or model:FindFirstChild("DraggableItem") ~= nil
+        or model:FindFirstChild("ItemName") ~= nil
 end
 
--- ── Name resolution ────────────────────────────────────────────────────────
+-- ════════════════════════════════════════════════════
+-- SELECTION SYSTEM
+--
+-- All three modes (click, lasso, group) use isSortableItem() as a gate so
+-- trees, land, ground, and the map can never be selected.
+--
+-- Group selection is the full Vanilla4 version:
+--   resolveOwner() → strict owner matching across 4 property patterns
+--   + model-name heuristic.  Nil-symmetry prevents grabbing another
+--   player's identically-named items.
+-- ════════════════════════════════════════════════════
+local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
+local camera = workspace.CurrentCamera
+
+-- ── Name resolution ────────────────────────────────
+-- Same priority as Vanilla4's itemName():
+--   1. StringValue "ItemName"
+--   2. StringValue "Name" child
+--   3. model.Name stripped of "PlayerName's " prefix
 local function itemName(model)
     local iv = model:FindFirstChild("ItemName")
     if iv and iv:IsA("StringValue") and iv.Value ~= "" then
@@ -822,7 +830,37 @@ local function itemName(model)
     return stripped or model.Name
 end
 
--- ── Shared selection state ─────────────────────────────────────────────────
+-- ── Owner resolution  (Vanilla4 full version) ─────
+-- Tries four LT2 owner-property patterns, then falls back to name heuristic.
+local function resolveOwner(model)
+    -- 1. ObjectValue "Owner"
+    local ov = model:FindFirstChild("Owner")
+    if ov then
+        if ov:IsA("ObjectValue") and ov.Value then
+            return "uid:" .. tostring(ov.Value.UserId)
+        elseif ov:IsA("StringValue") and ov.Value ~= "" then
+            return "str:" .. ov.Value
+        end
+    end
+    -- 2. IntValue "OwnerId"
+    local oid = model:FindFirstChild("OwnerId")
+    if oid and oid:IsA("IntValue") then
+        return "uid:" .. tostring(oid.Value)
+    end
+    -- 3. StringValue "OwnerName"
+    local on = model:FindFirstChild("OwnerName")
+    if on and on:IsA("StringValue") and on.Value ~= "" then
+        return "str:" .. on.Value
+    end
+    -- 4. Model name heuristic: "PlayerName's ItemName"
+    local namePart = string.match(model.Name, "^(.-)%'s%s")
+    if namePart and namePart ~= "" then
+        return "nameparse:" .. namePart
+    end
+    return nil  -- genuinely unowned / unknown
+end
+
+-- ── Shared selection state ─────────────────────────
 local selectedItems = {}   -- [Model] = SelectionBox
 
 local function highlightModel(model)
@@ -873,11 +911,10 @@ local function GetSelectionGroups()
     return groups
 end
 
--- Aliases used by teleport code
 local function SelectPart(model)   highlightModel(model)   end
 local function DeselectPart(model) unhighlightModel(model) end
 
--- ── Lasso overlay frame ────────────────────────────────────────────────────
+-- ── Lasso overlay frame ────────────────────────────
 local lassoFrame = Instance.new("Frame", gui)
 lassoFrame.Name                   = "LassoRect"
 lassoFrame.BackgroundColor3       = Color3.fromRGB(25, 117, 255)
@@ -887,84 +924,54 @@ lassoFrame.BorderSizePixel        = 2
 lassoFrame.Visible                = false
 lassoFrame.ZIndex                 = 20
 
-local mouse  = player:GetMouse()
-local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
 
--- ── Click selection ────────────────────────────────────────────────────────
--- Blocks trees, land, ground via isSortableItem
+-- ── Click selection ────────────────────────────────
 local function HandleClickSelection()
     local target = mouse.Target
     if not target then return end
-    local pm = getPlayerModels()
-    if not pm then return end
+    -- Walk up to a Model that passes the sortable filter
     local model = target:FindFirstAncestorOfClass("Model")
     while model do
-        if model.Parent == pm then break end
+        if isSortableItem(model) then break end
         local p = model.Parent
         model = (p and p:IsA("Model")) and p or nil
     end
     if not model then return end
-    -- Block trees, land, ground — only owned/draggable items allowed
-    if not isSortableItem(model) then return end
     if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
 end
 
 -- ════════════════════════════════════════════════════
--- GROUP SELECTION
+-- GROUP SELECTION  (full Vanilla4 version)
 --
--- Uses isSortableItem to block trees/land/ground on BOTH the clicked model
--- AND every candidate scanned in PlayerModels.
--- Then applies Vanilla1's full owner-matching + nil-symmetry + ItemType
--- discrimination on top, so only truly matching owned items are selected.
+-- Scans all of workspace (not just PlayerModels) so it works regardless of
+-- where LT2 stores objects at the time of the click.
+--
+-- Owner resolution order:
+--   1. ObjectValue  "Owner"     → "uid:<UserId>"
+--   2. StringValue  "Owner"     → "str:<name>"
+--   3. IntValue     "OwnerId"   → "uid:<id>"
+--   4. StringValue  "OwnerName" → "str:<name>"
+--   5. Name heuristic:  "PlayerName's ItemName" → "nameparse:<PlayerName>"
+--
+-- Nil-symmetry rule: if the clicked item has no owner, candidates must also
+-- have no owner — preventing cross-player selection of identically-named items.
 -- ════════════════════════════════════════════════════
-local function resolveOwner(model)
-    -- 1. ObjectValue "Owner"
-    local ov = model:FindFirstChild("Owner")
-    if ov then
-        if ov:IsA("ObjectValue") and ov.Value then
-            return "uid:" .. tostring(ov.Value.UserId)
-        elseif ov:IsA("StringValue") and ov.Value ~= "" then
-            return "str:" .. ov.Value
-        end
-    end
-    -- 2. IntValue "OwnerId"
-    local oid = model:FindFirstChild("OwnerId")
-    if oid and oid:IsA("IntValue") then
-        return "uid:" .. tostring(oid.Value)
-    end
-    -- 3. StringValue "OwnerName"
-    local on = model:FindFirstChild("OwnerName")
-    if on and on:IsA("StringValue") and on.Value ~= "" then
-        return "str:" .. on.Value
-    end
-    -- 4. Model name heuristic: "PlayerName's ItemName"
-    local namePart = string.match(model.Name, "^(.-)%'s%s")
-    if namePart and namePart ~= "" then
-        return "nameparse:" .. namePart
-    end
-    return nil   -- genuinely unowned / unknown
-end
-
 local function HandleGroupSelection()
     local target = mouse.Target
     if not target then return end
-    local pm = getPlayerModels()
-    if not pm then return end
 
-    -- Walk up to the direct child of PlayerModels that was clicked
+    -- Walk up until we find a model that passes the sortable filter
     local model = target:FindFirstAncestorOfClass("Model")
     while model do
-        if model.Parent == pm then break end
+        if isSortableItem(model) then break end
         local p = model.Parent
         model = (p and p:IsA("Model")) and p or nil
     end
     if not model then return end
 
-    -- Block trees, land, ground on the clicked model
-    if not isSortableItem(model) then return end
-
     local clickedName  = itemName(model)
-    local clickedOwner = resolveOwner(model)   -- nil = no owner found
+    local clickedOwner = resolveOwner(model)
 
     -- Optional secondary discriminator: ItemType StringValue
     local clickedType = nil
@@ -981,10 +988,8 @@ local function HandleGroupSelection()
     ))
 
     local count = 0
-    for _, obj in ipairs(pm:GetChildren()) do
+    for _, obj in ipairs(workspace:GetDescendants()) do
         if not obj:IsA("Model") then continue end
-
-        -- Block trees, land, ground on candidates too
         if not isSortableItem(obj) then continue end
 
         -- 1. Item name must match
@@ -1008,11 +1013,10 @@ local function HandleGroupSelection()
     print(string.format("[VH GroupSel] selected %d matching item(s)", count))
 end
 
--- ── Lasso selection ────────────────────────────────────────────────────────
--- Blocks trees, land, ground via isSortableItem
-local lassoActive   = false
-local lassoOriginX  = 0
-local lassoOriginY  = 0
+-- ── Lasso selection  (filtered by isSortableItem) ──
+local lassoActive    = false
+local lassoOriginX   = 0
+local lassoOriginY   = 0
 local lassoRenderConn
 
 local function FinaliseLasso()
@@ -1023,21 +1027,18 @@ local function FinaliseLasso()
     local minY = math.min(ay, ay + lassoFrame.AbsoluteSize.Y)
     local maxY = math.max(ay, ay + lassoFrame.AbsoluteSize.Y)
 
-    local pm = getPlayerModels()
-    if pm then
-        for _, obj in ipairs(pm:GetChildren()) do
-            if not obj:IsA("Model") then continue end
-            -- Block trees, land, ground — same guard as Vanilla4 sorter
-            if not isSortableItem(obj) then continue end
-            local rep = obj.PrimaryPart
-                     or obj:FindFirstChild("Main")
-                     or obj:FindFirstChildWhichIsA("BasePart")
-            if not rep then continue end
-            local sp, onScreen = camera:WorldToScreenPoint(rep.Position)
-            if onScreen and sp.X >= minX and sp.X <= maxX
-                        and sp.Y >= minY and sp.Y <= maxY then
-                highlightModel(obj)
-            end
+    -- Scan all workspace descendants; isSortableItem gates out trees/land/world
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if not obj:IsA("Model") then continue end
+        if not isSortableItem(obj) then continue end
+        local rep = obj.PrimaryPart
+                 or obj:FindFirstChild("Main")
+                 or obj:FindFirstChildWhichIsA("BasePart")
+        if not rep then continue end
+        local sp, onScreen = camera:WorldToScreenPoint(rep.Position)
+        if onScreen and sp.X >= minX and sp.X <= maxX
+                    and sp.Y >= minY and sp.Y <= maxY then
+            highlightModel(obj)
         end
     end
 
@@ -1071,23 +1072,21 @@ local function StartLasso(originX, originY)
     end)
 end
 
--- ── Ctrl+A: select everything in PlayerModels (sortable items only) ────────
+-- ── Ctrl+A: select all sortable items in workspace ─
 local function SelectAllItems()
-    local pm = getPlayerModels()
-    if not pm then return end
-    for _, obj in ipairs(pm:GetChildren()) do
+    for _, obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("Model") and isSortableItem(obj) then
             highlightModel(obj)
         end
     end
 end
 
--- ── Mode flags ─────────────────────────────────────────────────────────────
+-- ── Mode flags ─────────────────────────────────────
 local clickSelectionEnabled = false
 local lassoEnabled          = false
 local groupSelectionEnabled = false
 
--- ── Input wiring ───────────────────────────────────────────────────────────
+-- ── Input wiring ───────────────────────────────────
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
 
@@ -1744,7 +1743,7 @@ table.insert(cleanupTasks, function()
 end)
 
 -- ════════════════════════════════════════════════════
--- SHARED GLOBALS — exported for Vanilla2 and Vanilla3
+-- SHARED GLOBALS — exported for Vanilla2, Vanilla3, Vanilla4
 -- ════════════════════════════════════════════════════
 _G.VH = {
     TweenService     = TweenService,
@@ -1773,13 +1772,16 @@ _G.VH = {
     currentToggleKey = currentToggleKey,
     waitingForKeyGUI = waitingForKeyGUI,
     keybindButtonGUI = nil,
-    -- Selection API for Vanilla2 / Vanilla3
+    -- Selection API (also consumed by Vanilla4 / Sorter)
     Selection = {
-        GetParts  = GetSelectedParts,
-        GetGroups = GetSelectionGroups,
-        Clear     = ClearAllSelection,
-        Select    = SelectPart,
-        Deselect  = DeselectPart,
+        GetParts        = GetSelectedParts,
+        GetGroups       = GetSelectionGroups,
+        Clear           = ClearAllSelection,
+        Select          = SelectPart,
+        Deselect        = DeselectPart,
+        isSortableItem  = isSortableItem,
+        itemName        = itemName,
+        resolveOwner    = resolveOwner,
     },
 }
 
