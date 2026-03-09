@@ -1,1790 +1,1231 @@
--- DESTROY OLD GUI + cleanup (also kills all active connections from a previous run)
-if type(_G.VanillaHubCleanup) == "function" then
-    pcall(_G.VanillaHubCleanup)
-    _G.VanillaHubCleanup = nil
-end
+-- ════════════════════════════════════════════════════
+-- VANILLA4 — Sorter Tab  (v2 — layer-fill-first, bulletproof)
+-- Execute AFTER Vanilla1, Vanilla2, Vanilla3
+-- ════════════════════════════════════════════════════
 
--- Nuke leftover GUIs
-for _, name in pairs({"VanillaHub", "VanillaHubWarning"}) do
-    if game.CoreGui:FindFirstChild(name) then
-        game.CoreGui[name]:Destroy()
-    end
-end
-
--- Nuke leftover _G.VH table completely
-if _G.VH then
-    if _G.VH.butter and _G.VH.butter.running then
-        _G.VH.butter.running = false
-        if _G.VH.butter.thread then pcall(task.cancel, _G.VH.butter.thread) end
-        _G.VH.butter.thread = nil
-    end
-    _G.VH = nil
-end
-
--- Nuke leftover workspace markers
-if workspace:FindFirstChild("VanillaHubTpCircle") then
-    workspace.VanillaHubTpCircle:Destroy()
-end
-
--- Only Lumber Tycoon 2
-if game.PlaceId ~= 13822889 then
-    task.spawn(function()
-        task.wait(0.4)
-        local warnGui = Instance.new("ScreenGui")
-        warnGui.Name = "VanillaHubWarning"
-        warnGui.Parent = game.CoreGui
-        warnGui.ResetOnSpawn = false
-        local frame = Instance.new("Frame", warnGui)
-        frame.Size = UDim2.new(0, 400, 0, 220)
-        frame.Position = UDim2.new(0.5, -200, 0.5, -110)
-        frame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-        frame.BackgroundTransparency = 0.25
-        frame.BorderSizePixel = 0
-        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 16)
-        local uiStroke = Instance.new("UIStroke", frame)
-        uiStroke.Color = Color3.fromRGB(190, 50, 50)
-        uiStroke.Thickness = 1.5
-        uiStroke.Transparency = 0.45
-        local icon = Instance.new("TextLabel", frame)
-        icon.Size = UDim2.new(0, 48, 0, 48)
-        icon.Position = UDim2.new(0, 24, 0, 24)
-        icon.BackgroundTransparency = 1
-        icon.Font = Enum.Font.GothamBlack
-        icon.TextSize = 42
-        icon.TextColor3 = Color3.fromRGB(255, 90, 90)
-        icon.Text = "!"
-        local msg = Instance.new("TextLabel", frame)
-        msg.Size = UDim2.new(1, -100, 0, 120)
-        msg.Position = UDim2.new(0, 90, 0, 30)
-        msg.BackgroundTransparency = 1
-        msg.Font = Enum.Font.GothamSemibold
-        msg.TextSize = 15
-        msg.TextColor3 = Color3.fromRGB(230, 206, 226)
-        msg.TextXAlignment = Enum.TextXAlignment.Left
-        msg.TextYAlignment = Enum.TextYAlignment.Top
-        msg.TextWrapped = true
-        msg.Text = "VanillaHub is made exclusively for Lumber Tycoon 2 (Place ID: 13822889).\n\nPlease join Lumber Tycoon 2 and re-execute the script there."
-        local okBtn = Instance.new("TextButton", frame)
-        okBtn.Size = UDim2.new(0, 160, 0, 50)
-        okBtn.Position = UDim2.new(0.5, -80, 1, -70)
-        okBtn.BackgroundColor3 = Color3.fromRGB(190, 50, 50)
-        okBtn.BorderSizePixel = 0
-        okBtn.Font = Enum.Font.GothamBold
-        okBtn.TextSize = 17
-        okBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        okBtn.Text = "I Understand"
-        Instance.new("UICorner", okBtn).CornerRadius = UDim.new(0, 12)
-        local TS2 = game:GetService("TweenService")
-        frame.BackgroundTransparency = 1; msg.TextTransparency = 1; icon.TextTransparency = 1
-        okBtn.BackgroundTransparency = 1; okBtn.TextTransparency = 1
-        TS2:Create(frame, TweenInfo.new(0.75, Enum.EasingStyle.Quint), {BackgroundTransparency = 0.25}):Play()
-        TS2:Create(msg,   TweenInfo.new(0.85, Enum.EasingStyle.Quint), {TextTransparency = 0}):Play()
-        TS2:Create(icon,  TweenInfo.new(0.85, Enum.EasingStyle.Quint), {TextTransparency = 0}):Play()
-        TS2:Create(okBtn, TweenInfo.new(0.95, Enum.EasingStyle.Quint), {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-        okBtn.MouseButton1Click:Connect(function()
-            local outTween = TS2:Create(frame, TweenInfo.new(0.8, Enum.EasingStyle.Quint), {BackgroundTransparency = 1})
-            outTween:Play()
-            TS2:Create(msg,   TweenInfo.new(0.8), {TextTransparency = 1}):Play()
-            TS2:Create(icon,  TweenInfo.new(0.8), {TextTransparency = 1}):Play()
-            TS2:Create(okBtn, TweenInfo.new(0.8), {BackgroundTransparency = 1, TextTransparency = 1}):Play()
-            outTween.Completed:Connect(function() if warnGui and warnGui.Parent then warnGui:Destroy() end end)
-        end)
-    end)
+if not _G.VH then
+    warn("[VanillaHub] Vanilla4: _G.VH not found. Execute Vanilla1 first.")
     return
 end
 
--- ════════════════════════════════════════════════════
--- SERVICES & PLAYER
--- ════════════════════════════════════════════════════
-local TweenService     = game:GetService("TweenService")
-local Players          = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService       = game:GetService("RunService")
-local TeleportService  = game:GetService("TeleportService")
-local Stats            = game:GetService("Stats")
-local player           = Players.LocalPlayer
+local TweenService     = _G.VH.TweenService
+local UserInputService = _G.VH.UserInputService
+local RunService       = _G.VH.RunService
+local player           = _G.VH.player
+local cleanupTasks     = _G.VH.cleanupTasks
+local pages            = _G.VH.pages
+local BTN_COLOR        = _G.VH.BTN_COLOR
+local THEME_TEXT       = _G.VH.THEME_TEXT or Color3.fromRGB(230, 206, 226)
 
-local THEME_TEXT = Color3.fromRGB(230, 206, 226)
-
--- ════════════════════════════════════════════════════
--- CLEANUP REGISTRY
--- ════════════════════════════════════════════════════
-local cleanupTasks = {}
-local butterRunning = false
-local butterThread  = nil
-
-local function onExit()
-    butterRunning = false
-    if butterThread then pcall(task.cancel, butterThread); butterThread = nil end
-
-    if _G.VH and _G.VH.butter then
-        _G.VH.butter.running = false
-        if _G.VH.butter.thread then
-            pcall(task.cancel, _G.VH.butter.thread)
-            _G.VH.butter.thread = nil
-        end
-    end
-
-    for _, fn in ipairs(cleanupTasks) do pcall(fn) end
-    cleanupTasks = {}
-
-    pcall(function()
-        local lp = game:GetService("Players").LocalPlayer
-        local char = lp and lp.Character
-        if not char then return end
-        local hum = char:FindFirstChild("Humanoid")
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if hum then
-            hum.PlatformStand = false
-            hum.WalkSpeed     = 16
-            hum.JumpPower     = 50
-        end
-        if hrp then
-            for _, obj in ipairs(hrp:GetChildren()) do
-                if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") then
-                    pcall(function() obj:Destroy() end)
-                end
-            end
-        end
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then pcall(function() p.CanCollide = true end) end
-        end
-    end)
-
-    pcall(function()
-        if workspace:FindFirstChild("VanillaHubTpCircle") then
-            workspace.VanillaHubTpCircle:Destroy()
-        end
-    end)
-
-    pcall(function()
-        for _, obj in ipairs(workspace:GetChildren()) do
-            if obj.Name == "WalkWaterPlane" then obj:Destroy() end
-        end
-    end)
-
-    _G.VH = nil
-    _G.VanillaHubCleanup = nil
-end
+local sorterPage = pages["SorterTab"]
+local camera     = workspace.CurrentCamera
+local RS         = game:GetService("ReplicatedStorage")
+local mouse      = player:GetMouse()
 
 -- ════════════════════════════════════════════════════
--- GUI SCAFFOLD
+-- CONSTANTS
 -- ════════════════════════════════════════════════════
-local gui = Instance.new("ScreenGui")
-gui.Name = "VanillaHub"
-gui.Parent = game.CoreGui
-gui.ResetOnSpawn = false
-table.insert(cleanupTasks, function()
-    if gui and gui.Parent then gui:Destroy() end
-end)
-
-_G.VanillaHubCleanup = onExit
-
--- OUTER WRAPPER (no ClipsDescendants — dialog parents here so it isn't clipped)
-local wrapper = Instance.new("Frame", gui)
-wrapper.Size = UDim2.new(0, 0, 0, 0)
-wrapper.Position = UDim2.new(0.5, -260, 0.5, -170)
-wrapper.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-wrapper.BackgroundTransparency = 1
-wrapper.BorderSizePixel = 0
-wrapper.ClipsDescendants = false
-Instance.new("UICorner", wrapper).CornerRadius = UDim.new(0, 12)
-
--- MAIN (clips content)
-local main = Instance.new("Frame", wrapper)
-main.Size = UDim2.new(1, 0, 1, 0)
-main.Position = UDim2.new(0, 0, 0, 0)
-main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-main.BackgroundTransparency = 1
-main.BorderSizePixel = 0
-main.ClipsDescendants = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
-
-TweenService:Create(wrapper, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.new(0, 520, 0, 340),
-    BackgroundTransparency = 0
-}):Play()
-TweenService:Create(main, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    BackgroundTransparency = 0
-}):Play()
-
--- TOP BAR
-local topBar = Instance.new("Frame", main)
-topBar.Size = UDim2.new(1, 0, 0, 38)
-topBar.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-topBar.BorderSizePixel = 0
-topBar.ZIndex = 4
-
-local hubIcon = Instance.new("ImageLabel", topBar)
-hubIcon.Size               = UDim2.new(0, 26, 0, 26)
-hubIcon.Position           = UDim2.new(0, 7, 0.5, -13)
-hubIcon.BackgroundTransparency = 1
-hubIcon.BorderSizePixel    = 0
-hubIcon.ScaleType          = Enum.ScaleType.Fit
-hubIcon.ZIndex             = 6
-hubIcon.Image              = "rbxassetid://97128823316544"
-Instance.new("UICorner", hubIcon).CornerRadius = UDim.new(0, 5)
-
-local titleLbl = Instance.new("TextLabel", topBar)
-titleLbl.Size = UDim2.new(1, -90, 1, 0)
-titleLbl.Position = UDim2.new(0, 42, 0, 0)
-titleLbl.BackgroundTransparency = 1
-titleLbl.Text = "VanillaHub"
-titleLbl.Font = Enum.Font.GothamBold
-titleLbl.TextSize = 17
-titleLbl.TextColor3 = THEME_TEXT
-titleLbl.TextXAlignment = Enum.TextXAlignment.Left
-titleLbl.ZIndex = 5
-
-local closeBtn = Instance.new("TextButton", topBar)
-closeBtn.Size = UDim2.new(0, 32, 0, 32)
-closeBtn.Position = UDim2.new(1, -38, 0, 3)
-closeBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-closeBtn.Text = "×"
-closeBtn.Font = Enum.Font.Gotham
-closeBtn.TextSize = 20
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.BorderSizePixel = 0
-closeBtn.ZIndex = 5
-Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
+local HIGHLIGHT_COLOR  = Color3.fromRGB(255, 180, 0)
+local PREVIEW_COLOR    = Color3.fromRGB(80, 160, 255)
+local PLACED_COLOR     = Color3.fromRGB(60, 210, 100)
+local ITEM_GAP         = 0.08
+local DRIVE_TIMEOUT    = 8.0    -- seconds to drive item to target
+local HOLD_SECONDS     = 1.2    -- seconds to hold position after arrival
+local STABLE_NEEDED    = 40     -- consecutive stable frames to confirm locked
+local STABLE_DIST      = 0.6    -- studs/frame: max drift to count as stable
+local CONFIRM_DIST     = 2.5    -- studs: "arrived" threshold (tight)
+local VERIFY_DIST      = 4.0    -- studs: "still in place" threshold for drift checks
+local SLOT_RETRY_MAX   = 5      -- full retries per slot before giving up
 
 -- ════════════════════════════════════════════════════
--- CONFIRM CLOSE DIALOG
+-- STATE
 -- ════════════════════════════════════════════════════
-local function showConfirmClose()
-    if gui:FindFirstChild("ConfirmOverlay") then return end
+local selectedItems    = {}
+local previewPart      = nil
+local previewFollowing = false
+local previewPlaced    = false
+local isSorting        = false
+local isStopped        = false
+local sortThread       = nil
+local sortSlots        = nil
+local sortIndex        = 1
+local sortTotal        = 0
+local sortDone         = 0
+local overflowBlocked  = false
 
-    local overlay = Instance.new("Frame", gui)
-    overlay.Name = "ConfirmOverlay"
-    overlay.Size = UDim2.new(1, 0, 1, 0)
-    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    overlay.BackgroundTransparency = 0.4
-    overlay.ZIndex = 9
+local gridCols   = 3
+local gridLayers = 1
+local gridRows   = 0   -- 0 = auto
 
-    local dialog = Instance.new("Frame", gui)
-    dialog.Name = "ConfirmDialog"
-    dialog.Size = UDim2.new(0, 360, 0, 180)
-    dialog.Position = UDim2.new(0.5, -180, 0.5, -90)
-    dialog.BackgroundColor3 = Color3.fromRGB(20, 20, 22)
-    dialog.BorderSizePixel = 0
-    dialog.ZIndex = 10
-    Instance.new("UICorner", dialog).CornerRadius = UDim.new(0, 14)
-    local dStroke = Instance.new("UIStroke", dialog)
-    dStroke.Color = Color3.fromRGB(90, 90, 100)
-    dStroke.Thickness = 1.2
-    dStroke.Transparency = 0.6
+local clickSelEnabled = false
+local lassoEnabled    = false
+local groupSelEnabled = false
+local lassoStartPos   = nil
+local lassoDragging   = false
 
-    local dtitle = Instance.new("TextLabel", dialog)
-    dtitle.Size = UDim2.new(1, 0, 0, 40)
-    dtitle.BackgroundTransparency = 1
-    dtitle.Font = Enum.Font.GothamBold
-    dtitle.TextSize = 19
-    dtitle.TextColor3 = THEME_TEXT
-    dtitle.Text = "Confirm Exit"
-    dtitle.ZIndex = 11
-
-    local dmsg = Instance.new("TextLabel", dialog)
-    dmsg.Size = UDim2.new(1, -40, 0, 60)
-    dmsg.Position = UDim2.new(0, 20, 0, 45)
-    dmsg.BackgroundTransparency = 1
-    dmsg.Font = Enum.Font.Gotham
-    dmsg.TextSize = 15
-    dmsg.TextColor3 = THEME_TEXT
-    dmsg.Text = "Are you sure you want to close VanillaHub?\n\nYou will need to re-execute the script to use it again."
-    dmsg.TextWrapped = true
-    dmsg.TextYAlignment = Enum.TextYAlignment.Center
-    dmsg.ZIndex = 11
-
-    local cancelBtn2 = Instance.new("TextButton", dialog)
-    cancelBtn2.Size = UDim2.new(0, 150, 0, 46)
-    cancelBtn2.Position = UDim2.new(0.5, -160, 1, -65)
-    cancelBtn2.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-    cancelBtn2.Text = "Cancel"
-    cancelBtn2.Font = Enum.Font.GothamSemibold
-    cancelBtn2.TextSize = 16
-    cancelBtn2.TextColor3 = THEME_TEXT
-    cancelBtn2.ZIndex = 11
-    Instance.new("UICorner", cancelBtn2).CornerRadius = UDim.new(0, 10)
-
-    local confirmBtn2 = Instance.new("TextButton", dialog)
-    confirmBtn2.Size = UDim2.new(0, 150, 0, 46)
-    confirmBtn2.Position = UDim2.new(0.5, 10, 1, -65)
-    confirmBtn2.BackgroundColor3 = Color3.fromRGB(180, 45, 45)
-    confirmBtn2.Text = "Exit VanillaHub"
-    confirmBtn2.Font = Enum.Font.GothamSemibold
-    confirmBtn2.TextSize = 16
-    confirmBtn2.TextColor3 = Color3.fromRGB(255, 255, 255)
-    confirmBtn2.ZIndex = 11
-    Instance.new("UICorner", confirmBtn2).CornerRadius = UDim.new(0, 10)
-
-    for _, b in {cancelBtn2, confirmBtn2} do
-        b.MouseEnter:Connect(function()
-            TweenService:Create(b, TweenInfo.new(0.15), {
-                BackgroundColor3 = (b == confirmBtn2) and Color3.fromRGB(210, 60, 60) or Color3.fromRGB(70, 70, 80)
-            }):Play()
-        end)
-        b.MouseLeave:Connect(function()
-            TweenService:Create(b, TweenInfo.new(0.15), {
-                BackgroundColor3 = (b == confirmBtn2) and Color3.fromRGB(180, 45, 45) or Color3.fromRGB(45, 45, 50)
-            }):Play()
-        end)
-    end
-
-    local function closeDialog()
-        if overlay and overlay.Parent then overlay:Destroy() end
-        if dialog  and dialog.Parent  then dialog:Destroy()  end
-    end
-
-    cancelBtn2.MouseButton1Click:Connect(closeDialog)
-
-    confirmBtn2.MouseButton1Click:Connect(function()
-        closeDialog()
-        onExit()
-        local t = TweenService:Create(wrapper, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-            Size = UDim2.new(0, 0, 0, 0),
-            BackgroundTransparency = 1
-        })
-        t:Play()
-        t.Completed:Connect(function()
-            if gui and gui.Parent then gui:Destroy() end
-        end)
-    end)
-end
-
-closeBtn.MouseButton1Click:Connect(showConfirmClose)
-
--- DRAG
-local dragging, dragStart, startPos = false, nil, nil
-topBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true; dragStart = input.Position; startPos = wrapper.Position
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        wrapper.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-
--- SIDE PANEL
-local side = Instance.new("ScrollingFrame", main)
-side.Size = UDim2.new(0, 160, 1, -38)
-side.Position = UDim2.new(0, 0, 0, 38)
-side.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-side.BorderSizePixel = 0
-side.ScrollBarThickness = 4
-side.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 60)
-side.CanvasSize = UDim2.new(0, 0, 0, 0)
-local sideLayout = Instance.new("UIListLayout", side)
-sideLayout.Padding = UDim.new(0, 8)
-sideLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-sideLayout.SortOrder = Enum.SortOrder.LayoutOrder
-sideLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    side.CanvasSize = UDim2.new(0, 0, 0, sideLayout.AbsoluteContentSize.Y + 24)
-end)
-
--- CONTENT AREA
-local content = Instance.new("Frame", main)
-content.Size = UDim2.new(1, -160, 1, -38)
-content.Position = UDim2.new(0, 160, 0, 38)
-content.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-content.BorderSizePixel = 0
-
--- WELCOME POPUP
-task.spawn(function()
-    task.wait(0.8)
-    if not (gui and gui.Parent) then return end
-    local wf = Instance.new("Frame", gui)
-    wf.Size = UDim2.new(0, 380, 0, 90)
-    wf.Position = UDim2.new(0.5, -190, 1, -110)
-    wf.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
-    wf.BackgroundTransparency = 1
-    wf.BorderSizePixel = 0
-    Instance.new("UICorner", wf).CornerRadius = UDim.new(0, 14)
-    local ws = Instance.new("UIStroke", wf)
-    ws.Color = Color3.fromRGB(35, 35, 35); ws.Thickness = 1.2; ws.Transparency = 0.6
-    local pfp = Instance.new("ImageLabel", wf)
-    pfp.Size = UDim2.new(0, 64, 0, 64)
-    pfp.Position = UDim2.new(0, 20, 0.5, -32)
-    pfp.BackgroundTransparency = 1
-    pfp.ImageTransparency = 1
-    pfp.Image = Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-    Instance.new("UICorner", pfp).CornerRadius = UDim.new(1, 0)
-    local wt = Instance.new("TextLabel", wf)
-    wt.Size = UDim2.new(1, -110, 1, -20)
-    wt.Position = UDim2.new(0, 100, 0, 10)
-    wt.BackgroundTransparency = 1
-    wt.Font = Enum.Font.GothamSemibold; wt.TextSize = 18
-    wt.TextColor3 = THEME_TEXT
-    wt.TextXAlignment = Enum.TextXAlignment.Left
-    wt.TextYAlignment = Enum.TextYAlignment.Center
-    wt.TextWrapped = true; wt.TextTransparency = 1
-    wt.Text = "Welcome back,\n" .. player.DisplayName
-    TweenService:Create(wf, TweenInfo.new(0.7, Enum.EasingStyle.Quint), {BackgroundTransparency = 0.35}):Play()
-    TweenService:Create(wt, TweenInfo.new(0.7, Enum.EasingStyle.Quint), {TextTransparency = 0}):Play()
-    TweenService:Create(pfp, TweenInfo.new(0.7, Enum.EasingStyle.Quint), {ImageTransparency = 0}):Play()
-    task.delay(7, function()
-        if not (wf and wf.Parent) then return end
-        local ot = TweenService:Create(wf, TweenInfo.new(1.2, Enum.EasingStyle.Quint), {BackgroundTransparency = 1})
-        ot:Play()
-        TweenService:Create(wt, TweenInfo.new(1.2), {TextTransparency = 1}):Play()
-        TweenService:Create(pfp, TweenInfo.new(1.2), {ImageTransparency = 1}):Play()
-        ot.Completed:Connect(function() if wf and wf.Parent then wf:Destroy() end end)
-    end)
-end)
+local followConn = nil
 
 -- ════════════════════════════════════════════════════
--- TABS
--- ════════════════════════════════════════════════════
-local tabs = {"Home","Player","World","Teleport","Wood","Slot","Dupe","Item","Sorter","AutoBuy","Pixel Art","Build","Vehicle","Search","Settings"}
-local pages = {}
-
-for _, name in ipairs(tabs) do
-    local page = Instance.new("ScrollingFrame", content)
-    page.Name = name .. "Tab"
-    page.Size = UDim2.new(1, 0, 1, 0)
-    page.BackgroundTransparency = 1
-    page.BorderSizePixel = 0
-    page.ScrollBarThickness = 5
-    page.ScrollBarImageColor3 = Color3.fromRGB(70, 70, 70)
-    page.Visible = false
-    page.CanvasSize = UDim2.new(0, 0, 0, 0)
-    local list = Instance.new("UIListLayout", page)
-    list.Padding = UDim.new(0, 12)
-    list.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    list.SortOrder = Enum.SortOrder.LayoutOrder
-    local pad = Instance.new("UIPadding", page)
-    pad.PaddingTop = UDim.new(0, 16); pad.PaddingBottom = UDim.new(0, 16)
-    pad.PaddingLeft = UDim.new(0, 14); pad.PaddingRight = UDim.new(0, 14)
-    list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        page.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 40)
-    end)
-    pages[name .. "Tab"] = page
-end
-
--- TAB SWITCHING
-local activeTabButton = nil
-local function switchTab(targetName)
-    for _, page in pairs(pages) do page.Visible = (page.Name == targetName) end
-    if activeTabButton then
-        TweenService:Create(activeTabButton, TweenInfo.new(0.25), {
-            BackgroundColor3 = Color3.fromRGB(18,18,18),
-            TextColor3 = Color3.fromRGB(160,160,160)
-        }):Play()
-    end
-    local btn = side:FindFirstChild(targetName:gsub("Tab",""))
-    if btn then
-        activeTabButton = btn
-        TweenService:Create(btn, TweenInfo.new(0.25), {
-            BackgroundColor3 = Color3.fromRGB(40,40,40),
-            TextColor3 = THEME_TEXT
-        }):Play()
-    end
-end
-
-for _, name in ipairs(tabs) do
-    local btn = Instance.new("TextButton", side)
-    btn.Name = name
-    btn.Size = UDim2.new(0.92, 0, 0, 38)
-    btn.BackgroundColor3 = Color3.fromRGB(18,18,18)
-    btn.BorderSizePixel = 0
-    btn.Text = name
-    btn.Font = Enum.Font.GothamSemibold
-    btn.TextSize = 14
-    btn.TextColor3 = Color3.fromRGB(160,160,160)
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    local pad = Instance.new("UIPadding", btn)
-    pad.PaddingLeft = UDim.new(0, 16)
-
-    local rippleContainer = Instance.new("Frame", btn)
-    rippleContainer.Size = UDim2.new(1, 0, 1, 0)
-    rippleContainer.BackgroundTransparency = 1
-    rippleContainer.BorderSizePixel = 0
-    rippleContainer.ZIndex = 2
-    rippleContainer.ClipsDescendants = true
-    Instance.new("UICorner", rippleContainer).CornerRadius = UDim.new(0, 6)
-
-    btn.MouseEnter:Connect(function()
-        if activeTabButton ~= btn then
-            TweenService:Create(btn, TweenInfo.new(0.18), {
-                BackgroundColor3 = Color3.fromRGB(30,30,38),
-                TextColor3 = Color3.fromRGB(200, 185, 200)
-            }):Play()
-        end
-    end)
-    btn.MouseLeave:Connect(function()
-        if activeTabButton ~= btn then
-            TweenService:Create(btn, TweenInfo.new(0.18), {
-                BackgroundColor3 = Color3.fromRGB(18,18,18),
-                TextColor3 = Color3.fromRGB(160,160,160)
-            }):Play()
-        end
-    end)
-
-    btn.MouseButton1Click:Connect(function()
-        task.spawn(function()
-            local ripple = Instance.new("Frame", rippleContainer)
-            ripple.Size = UDim2.new(0, 8, 0, 8)
-            ripple.Position = UDim2.new(0.5, -4, 0.5, -4)
-            ripple.BackgroundColor3 = Color3.fromRGB(200, 185, 200)
-            ripple.BackgroundTransparency = 0.75
-            ripple.BorderSizePixel = 0
-            Instance.new("UICorner", ripple).CornerRadius = UDim.new(1, 0)
-            TweenService:Create(ripple, TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                Size = UDim2.new(0, 140, 0, 140),
-                Position = UDim2.new(0.5, -70, 0.5, -70),
-                BackgroundTransparency = 1.0
-            }):Play()
-            task.wait(0.4)
-            if ripple and ripple.Parent then ripple:Destroy() end
-        end)
-        switchTab(name.."Tab")
-    end)
-end
-
-switchTab("HomeTab")
-
--- ════════════════════════════════════════════════════
--- GUI TOGGLE
--- ════════════════════════════════════════════════════
-local currentToggleKey = Enum.KeyCode.LeftAlt
-local waitingForKeyGUI = false
-local guiOpen = true
-local isAnimatingGUI = false
-local keybindButtonGUI
-
-local function toggleGUI()
-    if isAnimatingGUI then return end
-    guiOpen = not guiOpen
-    isAnimatingGUI = true
-    if guiOpen then
-        wrapper.Visible = true
-        main.Visible    = true
-        wrapper.Size                = UDim2.new(0, 0, 0, 0)
-        wrapper.BackgroundTransparency = 1
-        main.Size                   = UDim2.new(0, 0, 0, 0)
-        main.BackgroundTransparency = 1
-        local ti = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        TweenService:Create(wrapper, ti, {Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0}):Play()
-        local t = TweenService:Create(main, ti, {Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0})
-        t:Play()
-        t.Completed:Connect(function() isAnimatingGUI = false end)
-    else
-        local ti = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        TweenService:Create(wrapper, ti, {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1}):Play()
-        local t = TweenService:Create(main, ti, {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1})
-        t:Play()
-        t.Completed:Connect(function()
-            wrapper.Visible = false
-            main.Visible    = false
-            isAnimatingGUI  = false
-        end)
-    end
-end
-
--- ════════════════════════════════════════════════════
--- HOME TAB
--- ════════════════════════════════════════════════════
-local homePage = pages["HomeTab"]
-
-local bubbleRow = Instance.new("Frame", homePage)
-bubbleRow.Size = UDim2.new(1, 0, 0, 100)
-bubbleRow.BackgroundTransparency = 1
-
-local bubbleIcon = Instance.new("ImageLabel", bubbleRow)
-bubbleIcon.Size     = UDim2.new(0, 52, 0, 52)
-bubbleIcon.Position = UDim2.new(0, 6, 0.5, -26)
-bubbleIcon.BackgroundColor3 = Color3.fromRGB(20, 14, 22)
-bubbleIcon.BorderSizePixel  = 0
-bubbleIcon.ScaleType        = Enum.ScaleType.Fit
-bubbleIcon.Image            = "rbxassetid://97128823316544"
-Instance.new("UICorner", bubbleIcon).CornerRadius = UDim.new(1, 0)
-local iconStroke = Instance.new("UIStroke", bubbleIcon)
-iconStroke.Color       = Color3.fromRGB(230, 206, 226)
-iconStroke.Thickness   = 1.8
-iconStroke.Transparency = 0.45
-
-local iconName = Instance.new("TextLabel", bubbleRow)
-iconName.Size               = UDim2.new(0, 64, 0, 16)
-iconName.Position           = UDim2.new(0, 0, 0.5, 28)
-iconName.BackgroundTransparency = 1
-iconName.Font               = Enum.Font.GothamBold
-iconName.TextSize           = 10
-iconName.TextColor3         = THEME_TEXT
-iconName.TextXAlignment     = Enum.TextXAlignment.Center
-iconName.Text               = "Vanilla"
-
-local tailShape = Instance.new("Frame", bubbleRow)
-tailShape.Size               = UDim2.new(0, 14, 0, 14)
-tailShape.Position           = UDim2.new(0, 64, 0.5, -7)
-tailShape.Rotation           = 45
-tailShape.BackgroundColor3   = Color3.fromRGB(36, 22, 38)
-tailShape.BorderSizePixel    = 0
-tailShape.ZIndex             = 1
-
-local bubbleBody = Instance.new("Frame", bubbleRow)
-bubbleBody.Size               = UDim2.new(1, -82, 0, 84)
-bubbleBody.Position           = UDim2.new(0, 72, 0.5, -42)
-bubbleBody.BackgroundColor3   = Color3.fromRGB(36, 22, 38)
-bubbleBody.BorderSizePixel    = 0
-bubbleBody.ZIndex             = 2
-Instance.new("UICorner", bubbleBody).CornerRadius = UDim.new(0, 14)
-
-local bubbleStroke = Instance.new("UIStroke", bubbleBody)
-bubbleStroke.Color       = Color3.fromRGB(230, 206, 226)
-bubbleStroke.Thickness   = 1.4
-bubbleStroke.Transparency = 0.55
-
-local bubbleGrad = Instance.new("UIGradient", bubbleBody)
-bubbleGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0,  Color3.fromRGB(52, 30, 54)),
-    ColorSequenceKeypoint.new(1,  Color3.fromRGB(28, 16, 30)),
-})
-bubbleGrad.Rotation = 135
-
-local bubbleGreeting = Instance.new("TextLabel", bubbleBody)
-bubbleGreeting.Size               = UDim2.new(1, -20, 0, 28)
-bubbleGreeting.Position           = UDim2.new(0, 14, 0, 10)
-bubbleGreeting.BackgroundTransparency = 1
-bubbleGreeting.Font               = Enum.Font.GothamBold
-bubbleGreeting.TextSize           = 17
-bubbleGreeting.TextColor3         = THEME_TEXT
-bubbleGreeting.TextXAlignment     = Enum.TextXAlignment.Left
-bubbleGreeting.Text               = "Hey " .. player.DisplayName .. "! 🌸"
-bubbleGreeting.ZIndex             = 3
-
-local bubbleMsg = Instance.new("TextLabel", bubbleBody)
-bubbleMsg.Size               = UDim2.new(1, -20, 0, 36)
-bubbleMsg.Position           = UDim2.new(0, 14, 0, 38)
-bubbleMsg.BackgroundTransparency = 1
-bubbleMsg.Font               = Enum.Font.Gotham
-bubbleMsg.TextSize           = 13
-bubbleMsg.TextColor3         = Color3.fromRGB(200, 180, 200)
-bubbleMsg.TextXAlignment     = Enum.TextXAlignment.Left
-bubbleMsg.TextYAlignment     = Enum.TextYAlignment.Top
-bubbleMsg.TextWrapped        = true
-bubbleMsg.Text               = "Welcome back to VanillaHub!\nEnjoy your time here ✨"
-bubbleMsg.ZIndex             = 3
-
--- STATS GRID
-local statsContainer = Instance.new("Frame", homePage)
-statsContainer.Size = UDim2.new(1, 0, 0, 160)
-statsContainer.BackgroundTransparency = 1
-local gridLayout = Instance.new("UIGridLayout", statsContainer)
-gridLayout.CellSize = UDim2.new(0,148,0,42)
-gridLayout.CellPadding = UDim2.new(0,12,0,12)
-gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-local function createStatusBox(text, color)
-    local box = Instance.new("Frame", statsContainer)
-    box.BackgroundColor3 = Color3.fromRGB(22,22,28); box.BorderSizePixel = 0
-    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
-    local lbl = Instance.new("TextLabel", box)
-    lbl.Size = UDim2.new(1,-8,1,-4); lbl.Position = UDim2.new(0,4,0,2)
-    lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.Gotham; lbl.TextSize = 13
-    lbl.TextColor3 = color or THEME_TEXT
-    lbl.Text = text; lbl.TextWrapped = true; lbl.TextXAlignment = Enum.TextXAlignment.Center
-    return lbl
-end
-
-local pingLabel = createStatusBox("Ping: calculating...")
-createStatusBox("Lag detected: No", Color3.fromRGB(100,200,100))
-createStatusBox("Account age: " .. player.AccountAge .. " days")
-createStatusBox("Executor: Unknown / Custom")
-
-local rejoinBtn = Instance.new("TextButton", statsContainer)
-rejoinBtn.Size = UDim2.new(0,148,0,42)
-rejoinBtn.BackgroundColor3 = Color3.fromRGB(22,22,28); rejoinBtn.BorderSizePixel = 0
-rejoinBtn.Font = Enum.Font.Gotham; rejoinBtn.TextSize = 14
-rejoinBtn.TextColor3 = THEME_TEXT; rejoinBtn.Text = "Rejoin"
-Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0, 8)
-rejoinBtn.MouseEnter:Connect(function()
-    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(35,35,45)}):Play()
-end)
-rejoinBtn.MouseLeave:Connect(function()
-    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(22,22,28)}):Play()
-end)
-rejoinBtn.MouseButton1Click:Connect(function()
-    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
-end)
-
-local pingConn = RunService.Heartbeat:Connect(function()
-    local ok, ping = pcall(function() return math.round(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-    pingLabel.Text = ok and ("Ping: " .. ping .. " ms") or "Ping: N/A"
-end)
-table.insert(cleanupTasks, function()
-    if pingConn then pingConn:Disconnect(); pingConn = nil end
-end)
-
--- ════════════════════════════════════════════════════
--- TELEPORT TAB
--- ════════════════════════════════════════════════════
-local teleportPage = pages["TeleportTab"]
-local tpHeader = Instance.new("TextLabel", teleportPage)
-tpHeader.Size = UDim2.new(1,-12,0,28); tpHeader.BackgroundTransparency = 1
-tpHeader.Font = Enum.Font.GothamBold; tpHeader.TextSize = 14
-tpHeader.TextColor3 = THEME_TEXT; tpHeader.TextXAlignment = Enum.TextXAlignment.Left
-tpHeader.Text = "Quick Teleport Locations"
-
-local locations = {
-    {name="Spawn",x=172,y=3,z=74},{name="The Den",x=323,y=41.8,z=1930},
-    {name="LightHouse",x=1464.8,y=355.25,z=3257.2},{name="Safari",x=111.85,y=11,z=-998.8},
-    {name="Bridge",x=112.31,y=11,z=-782.36},{name="Bob's Shack",x=260,y=8.4,z=-2542},
-    {name="EndTimesCave",x=113,y=-213,z=-951},{name="The Swamp",x=-1209,y=132.32,z=-801},
-    {name="The Cabin",x=1244,y=63.6,z=2306},{name="Volcano",x=-1585,y=622.8,z=1140},
-    {name="Boxed Cars",x=509,y=3.2,z=-1463},{name="Tiaga Peak",x=1560,y=410.32,z=3274},
-    {name="Land Store",x=258,y=3.2,z=-99},{name="Link's Logic",x=4605,y=3,z=-727},
-    {name="Palm Island",x=2549,y=-5.9,z=-42},{name="Palm Island 2",x=1960,y=-5.9,z=-1501},
-    {name="Palm Island 3",x=4344,y=-5.9,z=-1813},{name="Fine Art Shop",x=5207,y=-166.2,z=719},
-    {name="SnowGlow Biome",x=-1086.85,y=-5.9,z=-945.32},{name="Cave",x=3581,y=-179.54,z=430},
-    {name="Shrine Of Sight",x=-1600,y=195.4,z=919},{name="Fancy Furnishings",x=491,y=3.2,z=-1720},
-    {name="Docks",x=1114,y=-1.2,z=-197},{name="Strange Man",x=1061,y=16.8,z=1131},
-    {name="Wood Dropoff",x=323.41,y=-2.8,z=134.73},{name="Snow Biome",x=889.96,y=59.8,z=1195.55},
-    {name="Wood RU's",x=265,y=3.2,z=57},{name="Green Box",x=-1668.05,y=349.6,z=1475.39},
-    {name="Cherry Meadow",x=220.9,y=59.8,z=1305.8},{name="Bird Cave",x=4813.1,y=17.7,z=-978.8},
-}
-
-for _, loc in ipairs(locations) do
-    local btn = Instance.new("TextButton", teleportPage)
-    btn.Size = UDim2.new(1,-12,0,36); btn.BackgroundColor3 = Color3.fromRGB(20,20,26)
-    btn.BorderSizePixel = 0; btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13
-    btn.TextColor3 = THEME_TEXT; btn.Text = loc.name
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(38,38,50), TextColor3 = Color3.fromRGB(255,255,255)}):Play() end)
-    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(20,20,26), TextColor3 = THEME_TEXT}):Play() end)
-    btn.MouseButton1Click:Connect(function()
-        local char = player.Character
-        if char and char:FindFirstChild("HumanoidRootPart") then
-            char.HumanoidRootPart.CFrame = CFrame.new(loc.x, loc.y + 3, loc.z)
-        end
-    end)
-end
-
--- ════════════════════════════════════════════════════
--- ITEM TAB
--- ════════════════════════════════════════════════════
-local itemPage = pages["ItemTab"]
-local itemList = itemPage:FindFirstChildOfClass("UIListLayout")
-if itemList then itemList.Padding = UDim.new(0, 6) end
-
-local BTN_COLOR = Color3.fromRGB(45, 45, 50)
-local BTN_HOVER = Color3.fromRGB(70, 70, 80)
-
--- ════════════════════════════════════════════════════
--- ITEM FILTER  (ported from Vanilla4 / Sorter)
---
--- A model is "selectable" only if it is a genuine player-owned / draggable
--- item. Trees (TreeClass), land, ground, and static world objects are
--- explicitly excluded.  The check mirrors Vanilla4's isSortableItem().
+-- ITEM IDENTIFICATION
 -- ════════════════════════════════════════════════════
 local function isSortableItem(model)
     if not model or not model:IsA("Model") then return false end
     if model == workspace then return false end
-    -- Must have at least one BasePart to interact with
     local mp = model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
     if not mp then return false end
-    -- Trees are NOT selectable
     if model:FindFirstChild("TreeClass") then return false end
-    -- Must be a genuine owned/draggable/purchasable item
     return model:FindFirstChild("Owner") ~= nil
         or model:FindFirstChild("PurchasedBoxItemName") ~= nil
         or model:FindFirstChild("DraggableItem") ~= nil
         or model:FindFirstChild("ItemName") ~= nil
 end
 
--- ════════════════════════════════════════════════════
--- SELECTION SYSTEM
---
--- All three modes (click, lasso, group) use isSortableItem() as a gate so
--- trees, land, ground, and the map can never be selected.
---
--- Group selection is the full Vanilla4 version:
---   resolveOwner() → strict owner matching across 4 property patterns
---   + model-name heuristic.  Nil-symmetry prevents grabbing another
---   player's identically-named items.
--- ════════════════════════════════════════════════════
-local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
-local camera = workspace.CurrentCamera
-
--- ── Name resolution ────────────────────────────────
--- Same priority as Vanilla4's itemName():
---   1. StringValue "ItemName"
---   2. StringValue "Name" child
---   3. model.Name stripped of "PlayerName's " prefix
-local function itemName(model)
-    local iv = model:FindFirstChild("ItemName")
-    if iv and iv:IsA("StringValue") and iv.Value ~= "" then
-        return iv.Value
-    end
-    local nv = model:FindFirstChild("Name")
-    if nv and nv:IsA("StringValue") and nv.Value ~= "" then
-        return nv.Value
-    end
-    local stripped = string.match(model.Name, "^.-%'s%s+(.+)$")
-    return stripped or model.Name
+local function getMainPart(model)
+    return model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
 end
 
--- ── Owner resolution  (Vanilla4 full version) ─────
--- Tries four LT2 owner-property patterns, then falls back to name heuristic.
-local function resolveOwner(model)
-    -- 1. ObjectValue "Owner"
-    local ov = model:FindFirstChild("Owner")
-    if ov then
-        if ov:IsA("ObjectValue") and ov.Value then
-            return "uid:" .. tostring(ov.Value.UserId)
-        elseif ov:IsA("StringValue") and ov.Value ~= "" then
-            return "str:" .. ov.Value
-        end
-    end
-    -- 2. IntValue "OwnerId"
-    local oid = model:FindFirstChild("OwnerId")
-    if oid and oid:IsA("IntValue") then
-        return "uid:" .. tostring(oid.Value)
-    end
-    -- 3. StringValue "OwnerName"
-    local on = model:FindFirstChild("OwnerName")
-    if on and on:IsA("StringValue") and on.Value ~= "" then
-        return "str:" .. on.Value
-    end
-    -- 4. Model name heuristic: "PlayerName's ItemName"
-    local namePart = string.match(model.Name, "^(.-)%'s%s")
-    if namePart and namePart ~= "" then
-        return "nameparse:" .. namePart
-    end
-    return nil  -- genuinely unowned / unknown
-end
-
--- ── Shared selection state ─────────────────────────
-local selectedItems = {}   -- [Model] = SelectionBox
-
-local function highlightModel(model)
+-- ════════════════════════════════════════════════════
+-- SELECTION
+-- ════════════════════════════════════════════════════
+local function highlightItem(model)
     if selectedItems[model] then return end
-    local sb = Instance.new("SelectionBox")
-    sb.Color3        = SELECTION_COLOR
-    sb.LineThickness = 0.05
-    sb.Adornee       = model
-    sb.Parent        = model
-    selectedItems[model] = sb
+    local hl = Instance.new("SelectionBox")
+    hl.Color3              = HIGHLIGHT_COLOR
+    hl.LineThickness       = 0.06
+    hl.SurfaceTransparency = 0.78
+    hl.SurfaceColor3       = HIGHLIGHT_COLOR
+    hl.Adornee             = model
+    hl.Parent              = model
+    selectedItems[model]   = hl
 end
 
-local function unhighlightModel(model)
-    local sb = selectedItems[model]
-    if sb then pcall(function() sb:Destroy() end) end
-    selectedItems[model] = nil
+local function unhighlightItem(model)
+    if selectedItems[model] then
+        selectedItems[model]:Destroy()
+        selectedItems[model] = nil
+    end
 end
 
-local function ClearAllSelection()
-    for _, sb in pairs(selectedItems) do
-        pcall(function() sb:Destroy() end)
+local function unhighlightAll()
+    for model, hl in pairs(selectedItems) do
+        if hl and hl.Parent then hl:Destroy() end
     end
     selectedItems = {}
 end
 
-local function GetSelectedParts()
-    local t = {}
-    for model in pairs(selectedItems) do table.insert(t, model) end
-    return t
+local function countSelected()
+    local n = 0
+    for _ in pairs(selectedItems) do n = n + 1 end
+    return n
 end
 
-local function GetSelectionGroups()
-    local groups = {}
+local function groupSelectItem(target)
+    if not isSortableItem(target) then return end
+    local nv = target:FindFirstChild("ItemName") or target:FindFirstChild("PurchasedBoxItemName")
+    local targetName = nv and nv.Value or target.Name
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and isSortableItem(obj) then
+            local v = obj:FindFirstChild("ItemName") or obj:FindFirstChild("PurchasedBoxItemName")
+            local n = v and v.Value or obj.Name
+            if n == targetName then highlightItem(obj) end
+        end
+    end
+end
+
+-- ════════════════════════════════════════════════════
+-- SORT SLOT CALCULATOR
+-- Fills left→right (X cols), front→back (Z rows), bottom→top (Y layers).
+-- Tallest items sorted first so each layer's height is minimised.
+-- Slots are ordered so an entire layer is filled before the next begins.
+-- ════════════════════════════════════════════════════
+local function calculateSlots(items, anchorCF, colCount, layerCount, rowCount)
+    colCount   = math.max(1, colCount)
+    layerCount = math.max(1, layerCount)
+    rowCount   = math.max(0, rowCount)
+
+    -- Build entries with bounding box info
+    local entries = {}
+    for _, model in ipairs(items) do
+        local ok, _, sz = pcall(function() return model:GetBoundingBox() end)
+        local s = (ok and sz) or Vector3.new(2, 2, 2)
+        table.insert(entries, { model = model, w = s.X, h = s.Y, d = s.Z })
+    end
+
+    -- Sort tallest first so the bottom layer always has the tallest items
+    table.sort(entries, function(a, b) return a.h > b.h end)
+
+    local total = #entries
+
+    -- Rows per layer
+    local rpl
+    if rowCount > 0 then
+        rpl = rowCount
+    else
+        rpl = math.max(1, math.ceil(math.ceil(total / layerCount) / colCount))
+    end
+    local slotPerLayer = colCount * rpl
+
+    -- Assign (layer, row, col) — layer increments only after a full layer is filled
+    for i, e in ipairs(entries) do
+        local idx   = i - 1
+        local layer = math.floor(idx / slotPerLayer)
+        local rem   = idx % slotPerLayer
+        local row   = math.floor(rem / colCount)
+        local col   = rem % colCount
+        e.layer = layer
+        e.row   = row
+        e.col   = col
+    end
+
+    -- Per-layer max H, per (layer,row) max D
+    local layerMaxH, rowMaxD = {}, {}
+    for _, e in ipairs(entries) do
+        local l, r = e.layer, e.row
+        layerMaxH[l] = math.max(layerMaxH[l] or 0, e.h)
+        if not rowMaxD[l] then rowMaxD[l] = {} end
+        rowMaxD[l][r] = math.max(rowMaxD[l][r] or 0, e.d)
+    end
+
+    local maxLayer = 0
+    for _, e in ipairs(entries) do
+        if e.layer > maxLayer then maxLayer = e.layer end
+    end
+
+    -- Accumulate Y offsets per layer
+    local layerY = {}
+    local accY = 0
+    for l = 0, maxLayer do
+        layerY[l] = accY
+        accY = accY + (layerMaxH[l] or 0) + ITEM_GAP
+    end
+
+    -- Accumulate Z offsets per (layer, row)
+    local rowZ = {}
+    for l = 0, maxLayer do
+        rowZ[l] = {}
+        local accZ = 0
+        local maxRow = 0
+        for _, e in ipairs(entries) do
+            if e.layer == l and e.row > maxRow then maxRow = e.row end
+        end
+        for r = 0, maxRow do
+            rowZ[l][r] = accZ
+            accZ = accZ + ((rowMaxD[l] and rowMaxD[l][r]) or 0) + ITEM_GAP
+        end
+    end
+
+    -- Accumulate X offsets per column
+    local colMaxW = {}
+    for _, e in ipairs(entries) do
+        colMaxW[e.col] = math.max(colMaxW[e.col] or 0, e.w)
+    end
+    local colX = {}
+    local accX = 0
+    for c = 0, colCount - 1 do
+        colX[c] = accX
+        accX = accX + (colMaxW[c] or 0) + ITEM_GAP
+    end
+
+    -- Build slots — ordered exactly as entries (layer 0 full, then layer 1, …)
+    local slots = {}
+    for _, e in ipairs(entries) do
+        local lx = colX[e.col] + e.w / 2
+        local ly = layerY[e.layer] + e.h / 2
+        local lz = (rowZ[e.layer] and rowZ[e.layer][e.row] or 0) + e.d / 2
+        table.insert(slots, {
+            model  = e.model,
+            cf     = anchorCF * CFrame.new(lx, ly, lz),
+            layer  = e.layer,
+        })
+    end
+    return slots
+end
+
+-- ════════════════════════════════════════════════════
+-- PREVIEW BOX
+-- ════════════════════════════════════════════════════
+local function destroyPreview()
+    if followConn then followConn:Disconnect(); followConn = nil end
+    if previewPart and previewPart.Parent then previewPart:Destroy() end
+    previewPart      = nil
+    previewFollowing = false
+    previewPlaced    = false
+end
+
+local function computePreviewSize()
+    local entries = {}
     for model in pairs(selectedItems) do
-        local key = itemName(model) .. "|" .. tostring(
-            (function()
-                local ov = model:FindFirstChild("Owner")
-                if ov then
-                    if ov:IsA("ObjectValue") and ov.Value then return tostring(ov.Value.UserId) end
-                    if ov:IsA("StringValue") then return ov.Value end
-                end
-                return "nil"
-            end)()
-        )
-        groups[key] = groups[key] or {}
-        table.insert(groups[key], model)
+        local ok, _, sz = pcall(function() return model:GetBoundingBox() end)
+        local s = (ok and sz) or Vector3.new(2, 2, 2)
+        table.insert(entries, { w = s.X, h = s.Y, d = s.Z })
     end
-    return groups
+    if #entries == 0 then return 4, 4, 4 end
+
+    local cols   = math.max(1, gridCols)
+    local layers = math.max(1, gridLayers)
+    local rows   = math.max(0, gridRows)
+
+    local maxW, maxH, maxD = 0, 0, 0
+    for _, e in ipairs(entries) do
+        if e.w > maxW then maxW = e.w end
+        if e.h > maxH then maxH = e.h end
+        if e.d > maxD then maxD = e.d end
+    end
+
+    local totalItems = #entries
+    local slotPerLayer
+    if rows > 0 then
+        slotPerLayer = cols * rows
+    else
+        slotPerLayer = math.ceil(totalItems / layers)
+    end
+    local actualRows = math.ceil(slotPerLayer / cols)
+
+    local boxW = cols       * (maxW + ITEM_GAP) - ITEM_GAP
+    local boxH = layers     * (maxH + ITEM_GAP) - ITEM_GAP
+    local boxD = actualRows * (maxD + ITEM_GAP) - ITEM_GAP
+    return math.max(boxW, 1), math.max(boxH, 1), math.max(boxD, 1)
 end
 
-local function SelectPart(model)   highlightModel(model)   end
-local function DeselectPart(model) unhighlightModel(model) end
+local function getMouseSurfaceCF(halfH)
+    local unitRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
+    local params  = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local excl = {}
+    if previewPart then table.insert(excl, previewPart) end
+    local char = player.Character
+    if char then table.insert(excl, char) end
+    params.FilterDescendantsInstances = excl
 
--- ── Lasso overlay frame ────────────────────────────
-local lassoFrame = Instance.new("Frame", gui)
-lassoFrame.Name                   = "LassoRect"
-lassoFrame.BackgroundColor3       = Color3.fromRGB(25, 117, 255)
-lassoFrame.BackgroundTransparency = 0.75
-lassoFrame.BorderColor3           = Color3.fromRGB(23, 35, 200)
-lassoFrame.BorderSizePixel        = 2
-lassoFrame.Visible                = false
-lassoFrame.ZIndex                 = 20
-
-local mouse = player:GetMouse()
-
--- ── Click selection ────────────────────────────────
-local function HandleClickSelection()
-    local target = mouse.Target
-    if not target then return end
-    -- Walk up to a Model that passes the sortable filter
-    local model = target:FindFirstAncestorOfClass("Model")
-    while model do
-        if isSortableItem(model) then break end
-        local p = model.Parent
-        model = (p and p:IsA("Model")) and p or nil
-    end
-    if not model then return end
-    if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
-end
-
--- ════════════════════════════════════════════════════
--- GROUP SELECTION  (full Vanilla4 version)
---
--- Scans all of workspace (not just PlayerModels) so it works regardless of
--- where LT2 stores objects at the time of the click.
---
--- Owner resolution order:
---   1. ObjectValue  "Owner"     → "uid:<UserId>"
---   2. StringValue  "Owner"     → "str:<name>"
---   3. IntValue     "OwnerId"   → "uid:<id>"
---   4. StringValue  "OwnerName" → "str:<name>"
---   5. Name heuristic:  "PlayerName's ItemName" → "nameparse:<PlayerName>"
---
--- Nil-symmetry rule: if the clicked item has no owner, candidates must also
--- have no owner — preventing cross-player selection of identically-named items.
--- ════════════════════════════════════════════════════
-local function HandleGroupSelection()
-    local target = mouse.Target
-    if not target then return end
-
-    -- Walk up until we find a model that passes the sortable filter
-    local model = target:FindFirstAncestorOfClass("Model")
-    while model do
-        if isSortableItem(model) then break end
-        local p = model.Parent
-        model = (p and p:IsA("Model")) and p or nil
-    end
-    if not model then return end
-
-    local clickedName  = itemName(model)
-    local clickedOwner = resolveOwner(model)
-
-    -- Optional secondary discriminator: ItemType StringValue
-    local clickedType = nil
-    local itv = model:FindFirstChild("ItemType")
-    if itv and itv:IsA("StringValue") and itv.Value ~= "" then
-        clickedType = itv.Value
-    end
-
-    print(string.format(
-        "[VH GroupSel] clicked: name=%q  owner=%s  type=%s",
-        clickedName,
-        tostring(clickedOwner),
-        tostring(clickedType)
-    ))
-
-    local count = 0
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if not obj:IsA("Model") then continue end
-        if not isSortableItem(obj) then continue end
-
-        -- 1. Item name must match
-        if itemName(obj) ~= clickedName then continue end
-
-        -- 2. Owner must match with strict nil-symmetry
-        local objOwner = resolveOwner(obj)
-        if clickedOwner ~= objOwner then continue end
-
-        -- 3. ItemType must match if the clicked model had one
-        if clickedType ~= nil then
-            local objItv = obj:FindFirstChild("ItemType")
-            local objType = (objItv and objItv:IsA("StringValue") and objItv.Value ~= "") and objItv.Value or nil
-            if objType ~= clickedType then continue end
-        end
-
-        highlightModel(obj)
-        count = count + 1
-    end
-
-    print(string.format("[VH GroupSel] selected %d matching item(s)", count))
-end
-
--- ── Lasso selection  (filtered by isSortableItem) ──
-local lassoActive    = false
-local lassoOriginX   = 0
-local lassoOriginY   = 0
-local lassoRenderConn
-
-local function FinaliseLasso()
-    local ax   = lassoFrame.AbsolutePosition.X
-    local ay   = lassoFrame.AbsolutePosition.Y
-    local minX = math.min(ax, ax + lassoFrame.AbsoluteSize.X)
-    local maxX = math.max(ax, ax + lassoFrame.AbsoluteSize.X)
-    local minY = math.min(ay, ay + lassoFrame.AbsoluteSize.Y)
-    local maxY = math.max(ay, ay + lassoFrame.AbsoluteSize.Y)
-
-    -- Scan all workspace descendants; isSortableItem gates out trees/land/world
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if not obj:IsA("Model") then continue end
-        if not isSortableItem(obj) then continue end
-        local rep = obj.PrimaryPart
-                 or obj:FindFirstChild("Main")
-                 or obj:FindFirstChildWhichIsA("BasePart")
-        if not rep then continue end
-        local sp, onScreen = camera:WorldToScreenPoint(rep.Position)
-        if onScreen and sp.X >= minX and sp.X <= maxX
-                    and sp.Y >= minY and sp.Y <= maxY then
-            highlightModel(obj)
+    local result = workspace:Raycast(unitRay.Origin, unitRay.Direction * 600, params)
+    local hitPos
+    if result then
+        hitPos = result.Position
+    else
+        local t = unitRay.Origin.Y / -unitRay.Direction.Y
+        if t and t > 0 then
+            hitPos = unitRay.Origin + unitRay.Direction * t
+        else
+            hitPos = unitRay.Origin + unitRay.Direction * 40
         end
     end
-
-    lassoFrame.Size    = UDim2.new(0, 0, 0, 0)
-    lassoFrame.Visible = false
-    lassoActive        = false
+    return CFrame.new(hitPos.X, hitPos.Y + halfH, hitPos.Z)
 end
 
-local function StartLasso(originX, originY)
-    if lassoActive then return end
-    lassoActive   = true
-    lassoOriginX  = originX
-    lassoOriginY  = originY
-    lassoFrame.Position = UDim2.new(0, originX, 0, originY)
-    lassoFrame.Size     = UDim2.new(0, 0, 0, 0)
-    lassoFrame.Visible  = true
+local function buildPreviewBox(sX, sY, sZ)
+    if previewPart and previewPart.Parent then previewPart:Destroy() end
+    previewPart = Instance.new("Part")
+    previewPart.Name         = "VHSorterPreview"
+    previewPart.Anchored     = true
+    previewPart.CanCollide   = false
+    previewPart.CanQuery     = false
+    previewPart.CastShadow   = false
+    previewPart.Size         = Vector3.new(math.max(sX,0.5), math.max(sY,0.5), math.max(sZ,0.5))
+    previewPart.Color        = PREVIEW_COLOR
+    previewPart.Material     = Enum.Material.SmoothPlastic
+    previewPart.Transparency = 0.50
+    previewPart.Parent       = workspace
+    local sb = Instance.new("SelectionBox")
+    sb.Color3              = PREVIEW_COLOR
+    sb.LineThickness       = 0.07
+    sb.SurfaceTransparency = 1.0
+    sb.Adornee             = previewPart
+    sb.Parent              = previewPart
+end
 
-    lassoRenderConn = RunService.RenderStepped:Connect(function()
-        if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            lassoRenderConn:Disconnect()
-            lassoRenderConn = nil
-            FinaliseLasso()
-            return
+local function startPreviewFollow()
+    if not (previewPart and previewPart.Parent) then return end
+    previewFollowing = true
+    previewPlaced    = false
+    if followConn then followConn:Disconnect(); followConn = nil end
+    followConn = RunService.RenderStepped:Connect(function()
+        if not previewFollowing then return end
+        if not (previewPart and previewPart.Parent) then
+            followConn:Disconnect(); followConn = nil; return
         end
-        local x = math.min(lassoOriginX, mouse.X)
-        local y = math.min(lassoOriginY, mouse.Y)
-        local w = math.abs(mouse.X - lassoOriginX)
-        local h = math.abs(mouse.Y - lassoOriginY)
-        lassoFrame.Position = UDim2.new(0, x, 0, y)
-        lassoFrame.Size     = UDim2.new(0, w, 0, h)
+        local halfH    = previewPart.Size.Y / 2
+        local targetCF = getMouseSurfaceCF(halfH)
+        previewPart.CFrame = previewPart.CFrame:Lerp(targetCF, 0.22)
     end)
 end
 
--- ── Ctrl+A: select all sortable items in workspace ─
-local function SelectAllItems()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and isSortableItem(obj) then
-            highlightModel(obj)
+local function placePreview()
+    if not (previewPart and previewPart.Parent) then return end
+    if not previewFollowing then return end
+    previewFollowing = false
+    if followConn then followConn:Disconnect(); followConn = nil end
+    local halfH = previewPart.Size.Y / 2
+    previewPart.CFrame = getMouseSurfaceCF(halfH)
+    previewPart.Color  = PLACED_COLOR
+    local sb = previewPart:FindFirstChildOfClass("SelectionBox")
+    if sb then sb.Color3 = PLACED_COLOR end
+    previewPlaced = true
+end
+
+-- ════════════════════════════════════════════════════
+-- SORT ENGINE
+-- ════════════════════════════════════════════════════
+
+--[[
+  The game uses a mix of client-side and server-side dragging per item type.
+  Rather than probing each item, we do BOTH every frame:
+    1. Fire RS.Interaction.ClientIsDragging (server-sided items respond to this)
+    2. Write mp.CFrame directly (client-sided items respond to this)
+  This is exactly what the original working code did, just done more aggressively.
+  The key insight: firing ClientIsDragging tells the server to accept our
+  CFrame writes for that item, so doing both simultaneously covers all cases.
+]]
+
+-- Get the ClientIsDragging remote once and cache it
+local _dragRemote = nil
+local function getDragRemote()
+    if _dragRemote then return _dragRemote end
+    local interaction = RS:FindFirstChild("Interaction")
+    if interaction then
+        _dragRemote = interaction:FindFirstChild("ClientIsDragging")
+    end
+    return _dragRemote
+end
+
+local function goNear(pos, hrp)
+    if hrp then hrp.CFrame = CFrame.new(pos) * CFrame.new(0, 3, 4) end
+end
+
+local function zeroVelocity(model)
+    pcall(function()
+        for _, p in ipairs(model:GetDescendants()) do
+            if p:IsA("BasePart") and not p.Anchored then
+                p.AssemblyLinearVelocity  = Vector3.zero
+                p.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+    end)
+end
+
+--[[
+    placeAndLock(model, targetCF) → boolean
+
+    Every Heartbeat frame:
+      • Keeps character within 16 studs of the item
+      • Fires ClientIsDragging(model)  — unlocks server-sided items
+      • Writes mp.CFrame = dest        — moves client-sided items
+      • Zeros all velocity             — prevents physics flinging
+
+    Waits until the item has been within CONFIRM_DIST for STABLE_NEEDED
+    consecutive frames AND at least HOLD_SECONDS of real time, then returns.
+    Times out after DRIVE_TIMEOUT if the item never arrives.
+]]
+local function placeAndLock(model, targetCF)
+    if not (model and model.Parent) then return true end
+    local mp = getMainPart(model)
+    if not mp then return true end
+    local char = player.Character
+    local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    local dragRemote = getDragRemote()
+    local dest       = targetCF * CFrame.new(0, 0.04, 0)
+    local destPos    = dest.Position
+
+    goNear(mp.Position, hrp)
+
+    local driveStart   = tick()
+    local holdStart    = nil
+    local stableStreak = 0
+    local locked       = false
+    local done         = false
+
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        if done then return end
+        if not (mp and mp.Parent) then
+            locked = true; done = true; conn:Disconnect(); return
+        end
+
+        -- Stay close enough to drag
+        if (hrp.Position - mp.Position).Magnitude > 16 then
+            goNear(mp.Position, hrp)
+        end
+
+        -- Fire server remote + write CFrame every frame (covers both drag types)
+        pcall(function()
+            if dragRemote then dragRemote:FireServer(model) end
+            mp.CFrame = dest
+        end)
+        zeroVelocity(model)
+
+        -- Stability check
+        local dist = (mp.Position - destPos).Magnitude
+
+        if dist < CONFIRM_DIST then
+            holdStart    = holdStart or tick()
+            stableStreak = stableStreak + 1
+        else
+            stableStreak = 0
+            -- Hard timeout if we've never arrived
+            if not holdStart and (tick() - driveStart) >= DRIVE_TIMEOUT then
+                done = true; conn:Disconnect(); return
+            end
+        end
+
+        local heldLong = holdStart and (tick() - holdStart) >= HOLD_SECONDS
+        local isStable = stableStreak >= STABLE_NEEDED
+
+        if heldLong and isStable then
+            locked = true; done = true; conn:Disconnect()
+        elseif holdStart and (tick() - holdStart) > HOLD_SECONDS * 6 then
+            -- Absolute bail — held far too long, something is stuck
+            done = true; conn:Disconnect()
+        end
+    end)
+
+    while not done do task.wait() end
+
+    zeroVelocity(model)
+    return locked
+end
+
+-- Returns true if the slot's model is still close enough to its target
+local function isSlotFilled(slot)
+    local model = slot.model
+    if not (model and model.Parent) then return true end
+    local mp = getMainPart(model)
+    if not mp then return true end
+    return (mp.Position - slot.cf.Position).Magnitude < VERIFY_DIST
+end
+
+-- Sweep completed slots [1..upTo] and re-lock any that have drifted
+local function fixDriftedSlots(slots, upTo)
+    for i = 1, upTo do
+        if not isSorting then break end
+        local slot = slots[i]
+        if slot and not isSlotFilled(slot) then
+            pbLabel.Text = "🔧 Re-fixing slot " .. i .. " ..."
+            placeAndLock(slot.model, slot.cf)
         end
     end
 end
 
--- ── Mode flags ─────────────────────────────────────
-local clickSelectionEnabled = false
-local lassoEnabled          = false
-local groupSelectionEnabled = false
-
--- ── Input wiring ───────────────────────────────────
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-
-    if input.KeyCode == Enum.KeyCode.Escape then
-        ClearAllSelection(); return
-    end
-    if input.KeyCode == Enum.KeyCode.A
-    and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-        SelectAllItems(); return
-    end
-
-    if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-    if not (clickSelectionEnabled or lassoEnabled or groupSelectionEnabled) then return end
-
-    local startX, startY = mouse.X, mouse.Y
-
-    if groupSelectionEnabled then
-        HandleGroupSelection()
-    elseif lassoEnabled then
-        task.spawn(function()
-            local t0 = tick()
-            while tick() - t0 < 0.15
-            and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                RunService.RenderStepped:Wait()
-                if math.abs(mouse.X - startX) >= 5
-                or math.abs(mouse.Y - startY) >= 5 then
-                    StartLasso(startX, startY)
-                    return
-                end
-            end
-            HandleClickSelection()
-        end)
-    elseif clickSelectionEnabled then
-        HandleClickSelection()
-    end
-end)
-
-table.insert(cleanupTasks, function()
-    ClearAllSelection()
-    if lassoRenderConn then lassoRenderConn:Disconnect(); lassoRenderConn = nil end
-    lassoFrame.Visible = false
-    lassoActive = false
-end)
-
 -- ════════════════════════════════════════════════════
--- ITEM TAB UI
+-- UI HELPERS
 -- ════════════════════════════════════════════════════
-local isItemTeleporting = false
-local tpCircle = nil
-local tpProgressContainer, tpProgressFill, tpProgressLabel = nil, nil, nil
-
-local function createSectionLabel(text)
-    local lbl = Instance.new("TextLabel", itemPage)
-    lbl.Size = UDim2.new(1,-12,0,22); lbl.BackgroundTransparency = 1
+local function mkLabel(text)
+    local lbl = Instance.new("TextLabel", sorterPage)
+    lbl.Size = UDim2.new(1,-12,0,22)
+    lbl.BackgroundTransparency = 1
     lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11
-    lbl.TextColor3 = Color3.fromRGB(120,120,150); lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextColor3 = Color3.fromRGB(120,120,150)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Text = string.upper(text)
-    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0, 4)
+    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0,4)
 end
 
-local function createSep()
-    local sep = Instance.new("Frame", itemPage)
-    sep.Size = UDim2.new(1,-12,0,1); sep.BackgroundColor3 = Color3.fromRGB(40,40,55); sep.BorderSizePixel = 0
+local function mkSep()
+    local s = Instance.new("Frame", sorterPage)
+    s.Size = UDim2.new(1,-12,0,1)
+    s.BackgroundColor3 = Color3.fromRGB(40,40,55)
+    s.BorderSizePixel = 0
 end
 
-local function createItemButton(text, callback)
-    local btn = Instance.new("TextButton", itemPage)
-    btn.Size = UDim2.new(1,-12,0,32); btn.BackgroundColor3 = BTN_COLOR
+local function mkToggle(text, default, cb)
+    local fr = Instance.new("Frame", sorterPage)
+    fr.Size = UDim2.new(1,-12,0,32)
+    fr.BackgroundColor3 = Color3.fromRGB(24,24,30)
+    Instance.new("UICorner", fr).CornerRadius = UDim.new(0,6)
+
+    local lbl = Instance.new("TextLabel", fr)
+    lbl.Size = UDim2.new(1,-50,1,0); lbl.Position = UDim2.new(0,10,0,0)
+    lbl.BackgroundTransparency = 1; lbl.Text = text
+    lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 13
+    lbl.TextColor3 = THEME_TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+    local tb = Instance.new("TextButton", fr)
+    tb.Size = UDim2.new(0,34,0,18); tb.Position = UDim2.new(1,-44,0.5,-9)
+    tb.BackgroundColor3 = default and Color3.fromRGB(60,180,60) or BTN_COLOR
+    tb.Text = ""; Instance.new("UICorner", tb).CornerRadius = UDim.new(1,0)
+
+    local dot = Instance.new("Frame", tb)
+    dot.Size = UDim2.new(0,14,0,14)
+    dot.Position = UDim2.new(0, default and 18 or 2, 0.5, -7)
+    dot.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
+
+    local on = default
+    if cb then cb(on) end
+    tb.MouseButton1Click:Connect(function()
+        on = not on
+        TweenService:Create(tb,  TweenInfo.new(0.18, Enum.EasingStyle.Quint),
+            { BackgroundColor3 = on and Color3.fromRGB(60,180,60) or BTN_COLOR }):Play()
+        TweenService:Create(dot, TweenInfo.new(0.18, Enum.EasingStyle.Quint),
+            { Position = UDim2.new(0, on and 18 or 2, 0.5, -7) }):Play()
+        if cb then cb(on) end
+    end)
+    return fr
+end
+
+local function mkBtn(text, color, cb)
+    color = color or BTN_COLOR
+    local btn = Instance.new("TextButton", sorterPage)
+    btn.Size = UDim2.new(1,-12,0,34)
+    btn.BackgroundColor3 = color
     btn.Text = text; btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13
-    btn.TextColor3 = THEME_TEXT
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = BTN_HOVER}):Play() end)
-    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = BTN_COLOR}):Play() end)
-    btn.MouseButton1Click:Connect(callback)
+    btn.TextColor3 = THEME_TEXT; btn.BorderSizePixel = 0
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0,6)
+    local hov = Color3.fromRGB(
+        math.min(color.R*255+22,255)/255,
+        math.min(color.G*255+10,255)/255,
+        math.min(color.B*255+22,255)/255)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn,TweenInfo.new(0.12),{BackgroundColor3=hov}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn,TweenInfo.new(0.12),{BackgroundColor3=color}):Play()
+    end)
+    btn.MouseButton1Click:Connect(cb)
     return btn
 end
 
-local function createItemToggle(text, defaultState, callback)
-    local frame = Instance.new("Frame", itemPage)
-    frame.Size = UDim2.new(1,-12,0,32); frame.BackgroundColor3 = Color3.fromRGB(24,24,30)
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(1,-50,1,0); lbl.Position = UDim2.new(0,10,0,0)
-    lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.Font = Enum.Font.GothamSemibold
-    lbl.TextSize = 13; lbl.TextColor3 = THEME_TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local tb = Instance.new("TextButton", frame)
-    tb.Size = UDim2.new(0,34,0,18); tb.Position = UDim2.new(1,-44,0.5,-9)
-    tb.BackgroundColor3 = defaultState and Color3.fromRGB(60,180,60) or BTN_COLOR
-    tb.Text = ""; Instance.new("UICorner", tb).CornerRadius = UDim.new(1,0)
-    local circle = Instance.new("Frame", tb)
-    circle.Size = UDim2.new(0,14,0,14)
-    circle.Position = UDim2.new(0, defaultState and 18 or 2, 0.5, -7)
-    circle.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    Instance.new("UICorner", circle).CornerRadius = UDim.new(1,0)
-    local toggled = defaultState
-    if callback then callback(toggled) end
-    tb.MouseButton1Click:Connect(function()
-        toggled = not toggled
-        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = toggled and Color3.fromRGB(60,180,60) or BTN_COLOR
-        }):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
-        }):Play()
-        if callback then callback(toggled) end
-    end)
-    local function setToggled(val)
-        if toggled == val then return end
-        toggled = val
-        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = toggled and Color3.fromRGB(60,180,60) or BTN_COLOR
-        }):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
-        }):Play()
-    end
-    return frame, setToggled
-end
-
-createSectionLabel("Selection Mode")
-
-local clickSelToggleSetFn = nil
-local lassoToggleSetFn    = nil
-
-local _, clickSelSet = createItemToggle("Click Selection", false, function(val)
-    clickSelectionEnabled = val
-    if val then
-        lassoEnabled = false
-        if lassoToggleSetFn then lassoToggleSetFn(false) end
-    end
-end)
-clickSelToggleSetFn = clickSelSet
-
-local _, lassoSet = createItemToggle("Lasso Tool", false, function(val)
-    lassoEnabled = val
-    if val then
-        clickSelectionEnabled = false
-        if clickSelToggleSetFn then clickSelToggleSetFn(false) end
-    end
-end)
-lassoToggleSetFn = lassoSet
-
-createItemToggle("Group Selection", false, function(val)
-    groupSelectionEnabled = val
-end)
-
-createSep()
-createSectionLabel("Teleport Mode")
-
-local tpModeGroup  = true
-local tpModeRandom = false
-
-local groupTpToggleSetFn  = nil
-local randomTpToggleSetFn = nil
-
-local groupTpFrame, groupTpSet = createItemToggle("Group Teleport", true, function(val)
-    tpModeGroup = val
-    if val then
-        tpModeRandom = false
-        if randomTpToggleSetFn then randomTpToggleSetFn(false) end
-    end
-end)
-groupTpToggleSetFn = function(v) tpModeGroup = v; groupTpSet(v) end
-
-local randomTpFrame, randomTpSet = createItemToggle("Random Teleport", false, function(val)
-    tpModeRandom = val
-    if val then
-        tpModeGroup = false
-        if groupTpToggleSetFn then groupTpToggleSetFn(false) end
-    end
-end)
-randomTpToggleSetFn = function(v) tpModeRandom = v; randomTpSet(v) end
-
-createSep()
-createSectionLabel("Item Teleport Destination")
-
-local tpRow = Instance.new("Frame", itemPage)
-tpRow.Size = UDim2.new(1,-12,0,32); tpRow.BackgroundTransparency = 1
-
-local tpSet = Instance.new("TextButton", tpRow)
-tpSet.Size = UDim2.new(0.5,-4,1,0); tpSet.Position = UDim2.new(0,0,0,0)
-tpSet.BackgroundColor3 = BTN_COLOR; tpSet.Font = Enum.Font.GothamSemibold
-tpSet.TextSize = 12; tpSet.TextColor3 = THEME_TEXT; tpSet.Text = "Set Destination"
-Instance.new("UICorner", tpSet).CornerRadius = UDim.new(0, 6)
-
-local tpRemove = Instance.new("TextButton", tpRow)
-tpRemove.Size = UDim2.new(0.5,-4,1,0); tpRemove.Position = UDim2.new(0.5,4,0,0)
-tpRemove.BackgroundColor3 = BTN_COLOR; tpRemove.Font = Enum.Font.GothamSemibold
-tpRemove.TextSize = 12; tpRemove.TextColor3 = THEME_TEXT; tpRemove.Text = "Remove Destination"
-Instance.new("UICorner", tpRemove).CornerRadius = UDim.new(0, 6)
-
-for _, b in {tpSet, tpRemove} do
-    b.MouseEnter:Connect(function() TweenService:Create(b, TweenInfo.new(0.15), {BackgroundColor3 = BTN_HOVER}):Play() end)
-    b.MouseLeave:Connect(function() TweenService:Create(b, TweenInfo.new(0.15), {BackgroundColor3 = BTN_COLOR}):Play() end)
-end
-
-tpSet.MouseButton1Click:Connect(function()
-    if tpCircle then tpCircle:Destroy() end
-    tpCircle = Instance.new("Part")
-    tpCircle.Name = "VanillaHubTpCircle"
-    tpCircle.Shape = Enum.PartType.Ball
-    tpCircle.Size = Vector3.new(3,3,3)
-    tpCircle.Material = Enum.Material.SmoothPlastic
-    tpCircle.Color = Color3.fromRGB(120,120,130)
-    tpCircle.Anchored = true; tpCircle.CanCollide = false
-    local char = player.Character
-    if char and char:FindFirstChild("HumanoidRootPart") then
-        tpCircle.Position = char.HumanoidRootPart.Position
-    end
-    tpCircle.Parent = workspace
-end)
-
-tpRemove.MouseButton1Click:Connect(function()
-    if tpCircle then tpCircle:Destroy(); tpCircle = nil end
-end)
-
-table.insert(cleanupTasks, function()
-    if tpCircle and tpCircle.Parent then tpCircle:Destroy(); tpCircle = nil end
-    ClearAllSelection()
-end)
-
-createSep()
-createSectionLabel("Actions")
-
-createItemButton("Teleport Selected Items", function()
-    if not tpCircle then return end
-    if isItemTeleporting then return end
-    isItemTeleporting = true
-
-    task.spawn(function()
-        local queue = {}
-
-        if tpModeRandom then
-            local models = GetSelectedParts()
-            for i = #models, 2, -1 do
-                local j = math.random(1, i)
-                models[i], models[j] = models[j], models[i]
-            end
-            queue = models
-        else
-            local groups = GetSelectionGroups()
-            local groupKeys = {}
-            for k in pairs(groups) do table.insert(groupKeys, k) end
-            for i = #groupKeys, 2, -1 do
-                local j = math.random(1, i)
-                groupKeys[i], groupKeys[j] = groupKeys[j], groupKeys[i]
-            end
-            for _, k in ipairs(groupKeys) do
-                for _, model in ipairs(groups[k]) do
-                    table.insert(queue, model)
-                end
-            end
-        end
-
-        local total = #queue
-        local done  = 0
-
-        if tpProgressContainer then
-            tpProgressContainer.Visible = true
-            tpProgressFill.Size  = UDim2.new(0, 0, 1, 0)
-            tpProgressLabel.Text = "Teleporting... 0 / " .. total
-        end
-
-        for _, model in ipairs(queue) do
-            if not isItemTeleporting then break end
-            if not (model and model.Parent) then done = done + 1; continue end
-
-            local part = model.PrimaryPart
-                         or model:FindFirstChild("Main")
-                         or model:FindFirstChildWhichIsA("BasePart")
-            if not part then done = done + 1; continue end
-
-            local char = player.Character
-            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-            if not hrp then done = done + 1; continue end
-
-            hrp.CFrame = part.CFrame * CFrame.new(0, 4, 2)
-            task.wait(0.12)
-            local dragger = game.ReplicatedStorage:FindFirstChild("Interaction")
-                and game.ReplicatedStorage.Interaction:FindFirstChild("ClientIsDragging")
-            if dragger then dragger:FireServer(model) end
-            task.wait(0.08)
-            if part and part.Parent then part.CFrame = tpCircle.CFrame end
-            task.wait(0.08)
-            if dragger then dragger:FireServer(model) end
-            task.wait(0.22)
-
-            DeselectPart(model)
-            done = done + 1
-
-            if tpProgressContainer and tpProgressContainer.Visible then
-                local pct = done / math.max(total, 1)
-                TweenService:Create(tpProgressFill, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
-                    Size = UDim2.new(pct, 0, 1, 0)
-                }):Play()
-                tpProgressLabel.Text = "Teleporting... " .. done .. " / " .. total
-            end
-        end
-
-        isItemTeleporting = false
-
-        if tpProgressContainer and tpProgressContainer.Visible then
-            TweenService:Create(tpProgressFill, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 1, 0)}):Play()
-            tpProgressLabel.Text = "Done! " .. done .. " / " .. total .. " teleported"
-            task.delay(1.8, function()
-                if tpProgressContainer then
-                    TweenService:Create(tpProgressContainer, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-                    TweenService:Create(tpProgressFill,      TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-                    TweenService:Create(tpProgressLabel,     TweenInfo.new(0.4), {TextTransparency = 1}):Play()
-                    task.delay(0.45, function()
-                        if tpProgressContainer then
-                            tpProgressContainer.Visible = false
-                            tpProgressContainer.BackgroundTransparency = 0
-                            tpProgressFill.BackgroundTransparency = 0
-                            tpProgressLabel.TextTransparency = 0
-                        end
-                    end)
-                end
-            end)
-        end
-    end)
-end)
-
-createItemButton("Cancel Teleport", function() isItemTeleporting = false end)
-createItemButton("Clear Selection",  function() ClearAllSelection() end)
-
-do
-    local pbWrapper = Instance.new("Frame", itemPage)
-    pbWrapper.Size = UDim2.new(1,-12,0,44)
-    pbWrapper.BackgroundColor3 = Color3.fromRGB(18,18,24)
-    pbWrapper.BorderSizePixel = 0
-    pbWrapper.Visible = false
-    Instance.new("UICorner", pbWrapper).CornerRadius = UDim.new(0, 8)
-    local pbStroke = Instance.new("UIStroke", pbWrapper)
-    pbStroke.Color = Color3.fromRGB(60,60,80); pbStroke.Thickness = 1; pbStroke.Transparency = 0.5
-    local pbLabel = Instance.new("TextLabel", pbWrapper)
-    pbLabel.Size = UDim2.new(1,-12,0,16)
-    pbLabel.Position = UDim2.new(0,6,0,4)
-    pbLabel.BackgroundTransparency = 1
-    pbLabel.Font = Enum.Font.GothamSemibold; pbLabel.TextSize = 11
-    pbLabel.TextColor3 = THEME_TEXT
-    pbLabel.TextXAlignment = Enum.TextXAlignment.Left
-    pbLabel.Text = "Teleporting..."
-    local pbTrack = Instance.new("Frame", pbWrapper)
-    pbTrack.Size = UDim2.new(1,-12,0,12)
-    pbTrack.Position = UDim2.new(0,6,0,24)
-    pbTrack.BackgroundColor3 = Color3.fromRGB(30,30,40)
-    pbTrack.BorderSizePixel = 0
-    Instance.new("UICorner", pbTrack).CornerRadius = UDim.new(1,0)
-    local pbFill = Instance.new("Frame", pbTrack)
-    pbFill.Size = UDim2.new(0,0,1,0)
-    pbFill.BackgroundColor3 = Color3.fromRGB(80,180,255)
-    pbFill.BorderSizePixel = 0
-    Instance.new("UICorner", pbFill).CornerRadius = UDim.new(1,0)
-    tpProgressContainer = pbWrapper
-    tpProgressFill      = pbFill
-    tpProgressLabel     = pbLabel
-end
-
--- ════════════════════════════════════════════════════
--- PLAYER TAB
--- ════════════════════════════════════════════════════
-local playerPage = pages["PlayerTab"]
-
-local function createPSection(text)
-    local lbl = Instance.new("TextLabel", playerPage)
-    lbl.Size = UDim2.new(1,-12,0,22); lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11
-    lbl.TextColor3 = Color3.fromRGB(120,120,150); lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Text = string.upper(text)
-    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0, 4)
-end
-
-local function createPSep()
-    local s = Instance.new("Frame", playerPage)
-    s.Size = UDim2.new(1,-12,0,1); s.BackgroundColor3 = Color3.fromRGB(40,40,55); s.BorderSizePixel = 0
-end
-
-local savedWalkSpeed = 16
-local savedJumpPower = 50
-
-local statsConn2 = RunService.Heartbeat:Connect(function()
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChild("Humanoid")
-    if not hum then return end
-    if hum.WalkSpeed ~= savedWalkSpeed then hum.WalkSpeed = savedWalkSpeed end
-    if hum.JumpPower ~= savedJumpPower then hum.JumpPower = savedJumpPower end
-end)
-table.insert(cleanupTasks, function()
-    if statsConn2 then statsConn2:Disconnect(); statsConn2 = nil end
-    local char = player.Character
-    if char then
-        local hum = char:FindFirstChild("Humanoid")
-        if hum then hum.WalkSpeed = 16; hum.JumpPower = 50 end
-    end
-end)
-
-local function createPSlider(labelText, minVal, maxVal, defaultVal, onChanged)
-    local frame = Instance.new("Frame", playerPage)
-    frame.Size = UDim2.new(1,-12,0,52); frame.BackgroundColor3 = Color3.fromRGB(24,24,30)
-    frame.BorderSizePixel = 0; Instance.new("UICorner", frame).CornerRadius = UDim.new(0,6)
-    local topRow = Instance.new("Frame", frame)
-    topRow.Size = UDim2.new(1,-16,0,22); topRow.Position = UDim2.new(0,8,0,6); topRow.BackgroundTransparency = 1
-    local lbl = Instance.new("TextLabel", topRow)
-    lbl.Size = UDim2.new(0.7,0,1,0); lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 13
-    lbl.TextColor3 = THEME_TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.Text = labelText
-    local valLbl = Instance.new("TextLabel", topRow)
-    valLbl.Size = UDim2.new(0.3,0,1,0); valLbl.Position = UDim2.new(0.7,0,0,0); valLbl.BackgroundTransparency = 1
-    valLbl.Font = Enum.Font.GothamBold; valLbl.TextSize = 13
-    valLbl.TextColor3 = THEME_TEXT; valLbl.TextXAlignment = Enum.TextXAlignment.Right
-    valLbl.Text = tostring(defaultVal)
-    local track = Instance.new("Frame", frame)
-    track.Size = UDim2.new(1,-16,0,6); track.Position = UDim2.new(0,8,0,36)
-    track.BackgroundColor3 = Color3.fromRGB(40,40,55); track.BorderSizePixel = 0
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
-    local fill = Instance.new("Frame", track)
-    fill.Size = UDim2.new((defaultVal-minVal)/(maxVal-minVal),0,1,0)
-    fill.BackgroundColor3 = Color3.fromRGB(80,80,100); fill.BorderSizePixel = 0
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
-    local knob = Instance.new("TextButton", track)
-    knob.Size = UDim2.new(0,16,0,16); knob.AnchorPoint = Vector2.new(0.5,0.5)
-    knob.Position = UDim2.new((defaultVal-minVal)/(maxVal-minVal),0,0.5,0)
-    knob.BackgroundColor3 = Color3.fromRGB(210,210,225); knob.Text = ""; knob.BorderSizePixel = 0
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
-    local draggingSlider = false
-    local function updateSlider(absX)
-        local ratio = math.clamp((absX - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-        local val = math.round(minVal + ratio*(maxVal-minVal))
-        fill.Size = UDim2.new(ratio,0,1,0)
-        knob.Position = UDim2.new(ratio,0,0.5,0)
-        valLbl.Text = tostring(val)
-        if onChanged then onChanged(val) end
-    end
-    knob.MouseButton1Down:Connect(function() draggingSlider = true end)
-    track.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            draggingSlider = true; updateSlider(input.Position.X)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
-            updateSlider(input.Position.X)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then draggingSlider = false end
-    end)
-    return frame
-end
-
-local function createPToggle(text, defaultState, callback)
-    local frame = Instance.new("Frame", playerPage)
-    frame.Size = UDim2.new(1,-12,0,32); frame.BackgroundColor3 = Color3.fromRGB(24,24,30)
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0,6)
-    local lbl = Instance.new("TextLabel", frame)
-    lbl.Size = UDim2.new(1,-50,1,0); lbl.Position = UDim2.new(0,10,0,0)
-    lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.Font = Enum.Font.GothamSemibold
-    lbl.TextSize = 13; lbl.TextColor3 = THEME_TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local tb = Instance.new("TextButton", frame)
-    tb.Size = UDim2.new(0,34,0,18); tb.Position = UDim2.new(1,-44,0.5,-9)
-    tb.BackgroundColor3 = defaultState and Color3.fromRGB(60,180,60) or BTN_COLOR
-    tb.Text = ""; Instance.new("UICorner", tb).CornerRadius = UDim.new(1,0)
-    local circle = Instance.new("Frame", tb)
-    circle.Size = UDim2.new(0,14,0,14)
-    circle.Position = UDim2.new(0, defaultState and 18 or 2, 0.5, -7)
-    circle.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    Instance.new("UICorner", circle).CornerRadius = UDim.new(1,0)
-    local toggled = defaultState
-    if callback then callback(toggled) end
-    local function setToggled(val)
-        toggled = val
-        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            BackgroundColor3 = toggled and Color3.fromRGB(60,180,60) or BTN_COLOR
-        }):Play()
-        TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
-        }):Play()
-    end
-    tb.MouseButton1Click:Connect(function()
-        toggled = not toggled
-        setToggled(toggled)
-        if callback then callback(toggled) end
-    end)
-    return frame, setToggled, function() return toggled end
-end
-
-createPSection("Movement")
-
-createPSlider("Walkspeed", 16, 150, 16, function(val)
-    savedWalkSpeed = val
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = val end
-end)
-
-createPSlider("Jumpower", 50, 300, 50, function(val)
-    savedJumpPower = val
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then char.Humanoid.JumpPower = val end
-end)
-
-local flySpeed = 100
-createPSlider("Fly Speed", 100, 500, 100, function(val) flySpeed = val end)
-
--- Fly key button
-local flyKeyFrame = Instance.new("Frame", playerPage)
-flyKeyFrame.Size = UDim2.new(1,-12,0,32); flyKeyFrame.BackgroundColor3 = Color3.fromRGB(24,24,30)
-Instance.new("UICorner", flyKeyFrame).CornerRadius = UDim.new(0,6)
-local flyKeyLabel = Instance.new("TextLabel", flyKeyFrame)
-flyKeyLabel.Size = UDim2.new(0.6,0,1,0); flyKeyLabel.Position = UDim2.new(0,10,0,0)
-flyKeyLabel.BackgroundTransparency = 1; flyKeyLabel.Font = Enum.Font.GothamSemibold; flyKeyLabel.TextSize = 13
-flyKeyLabel.TextColor3 = THEME_TEXT; flyKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
-flyKeyLabel.Text = "Fly Key"
-local currentFlyKey = Enum.KeyCode.Q
-local flyKeyBtn = Instance.new("TextButton", flyKeyFrame)
-flyKeyBtn.Size = UDim2.new(0,60,0,22); flyKeyBtn.Position = UDim2.new(1,-68,0.5,-11)
-flyKeyBtn.BackgroundColor3 = BTN_COLOR; flyKeyBtn.Font = Enum.Font.GothamSemibold
-flyKeyBtn.TextSize = 12; flyKeyBtn.TextColor3 = THEME_TEXT; flyKeyBtn.Text = "Q"
-flyKeyBtn.BorderSizePixel = 0; Instance.new("UICorner", flyKeyBtn).CornerRadius = UDim.new(0,6)
-flyKeyBtn.MouseEnter:Connect(function() TweenService:Create(flyKeyBtn, TweenInfo.new(0.15), {BackgroundColor3 = BTN_HOVER}):Play() end)
-flyKeyBtn.MouseLeave:Connect(function() TweenService:Create(flyKeyBtn, TweenInfo.new(0.15), {BackgroundColor3 = BTN_COLOR}):Play() end)
-flyKeyBtn.MouseButton1Click:Connect(function()
-    if _G.VH and _G.VH.waitingForFlyKey then return end
-    if _G.VH then _G.VH.waitingForFlyKey = true end
-    flyKeyBtn.Text = "..."
-    flyKeyBtn.BackgroundColor3 = Color3.fromRGB(60,100,60)
-end)
-
-local flyHint = Instance.new("TextLabel", playerPage)
-flyHint.Size = UDim2.new(1,-12,0,22)
-flyHint.BackgroundColor3 = Color3.fromRGB(18,18,24)
-flyHint.BorderSizePixel = 0
-flyHint.Font = Enum.Font.Gotham; flyHint.TextSize = 11
-flyHint.TextColor3 = Color3.fromRGB(100,100,130)
-flyHint.TextWrapped = true; flyHint.TextXAlignment = Enum.TextXAlignment.Left
-flyHint.Text = "  Press your Fly Key (Q) to toggle fly on/off"
-Instance.new("UICorner", flyHint).CornerRadius = UDim.new(0,6)
-Instance.new("UIPadding", flyHint).PaddingLeft = UDim.new(0,6)
-
-local isFlyEnabled     = false
-local flyToggleEnabled = false
-local flyBV, flyBG, flyConn
-
-local function stopFly()
-    isFlyEnabled = false
-    if _G.VH then _G.VH.isFlyEnabled = false end
-    if flyConn then flyConn:Disconnect(); flyConn = nil end
-    if flyBV and flyBV.Parent then flyBV:Destroy(); flyBV = nil end
-    if flyBG and flyBG.Parent then flyBG:Destroy(); flyBG = nil end
-    local char = player.Character
-    if char and char:FindFirstChild("Humanoid") then
-        char.Humanoid.PlatformStand = false
-    end
-end
-
-local function startFly()
-    stopFly()
-    isFlyEnabled = true
-    if _G.VH then _G.VH.isFlyEnabled = true end
-    local char = player.Character
-    if not char then isFlyEnabled = false; return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    local hum  = char:FindFirstChild("Humanoid")
-    if not root or not hum then isFlyEnabled = false; return end
-    hum.PlatformStand = true
-    flyBV = Instance.new("BodyVelocity", root)
-    flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
-    flyBV.Velocity = Vector3.zero
-    flyBG = Instance.new("BodyGyro", root)
-    flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
-    flyBG.P = 1e4; flyBG.D = 100
-    flyConn = RunService.Heartbeat:Connect(function()
-        if not (flyBV and flyBV.Parent and flyBG and flyBG.Parent) then return end
-        local c2  = player.Character
-        local h2  = c2 and c2:FindFirstChild("Humanoid")
-        local r2  = c2 and c2:FindFirstChild("HumanoidRootPart")
-        if not (h2 and r2) then return end
-        local cam = workspace.CurrentCamera
-        local cf  = cam.CFrame
-        local UIS = UserInputService
-        local dir = Vector3.zero
-        if UIS:IsKeyDown(Enum.KeyCode.W)         then dir = dir + cf.LookVector  end
-        if UIS:IsKeyDown(Enum.KeyCode.S)         then dir = dir - cf.LookVector  end
-        if UIS:IsKeyDown(Enum.KeyCode.A)         then dir = dir - cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D)         then dir = dir + cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space)     then dir = dir + Vector3.new(0,1,0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0,1,0) end
-        h2.PlatformStand = true
-        flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
-        flyBV.Velocity = dir.Magnitude > 0 and dir.Unit * flySpeed or Vector3.zero
-        flyBG.CFrame   = cf
-    end)
-end
-
-table.insert(cleanupTasks, stopFly)
-
-createPToggle("Fly", true, function(val)
-    flyToggleEnabled = val
-    if _G.VH then _G.VH.flyToggleEnabled = flyToggleEnabled end
-    if not val and isFlyEnabled then stopFly() end
-end)
-
-createPSep()
-createPSection("Character")
-
-local noclipEnabled = false
-local noclipConn
-createPToggle("Noclip", false, function(val)
-    noclipEnabled = val
-    if val then
-        noclipConn = RunService.Stepped:Connect(function()
-            if not noclipEnabled then return end
-            local char = player.Character
-            if not char then return end
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = false end
-            end
-        end)
-    else
-        if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
-        local char = player.Character
-        if char then
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = true end
-            end
-        end
-    end
-end)
-table.insert(cleanupTasks, function()
-    noclipEnabled = false
-    if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
-end)
-
-local infJumpEnabled = false
-local infJumpConn
-createPToggle("InfJump", false, function(val)
-    infJumpEnabled = val
-    if val then
-        infJumpConn = UserInputService.JumpRequest:Connect(function()
-            if not infJumpEnabled then return end
-            local char = player.Character
-            if char and char:FindFirstChild("Humanoid") then
-                char.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end)
-    else
-        if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
-    end
-end)
-table.insert(cleanupTasks, function()
-    infJumpEnabled = false
-    if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
-end)
-
--- ════════════════════════════════════════════════════
--- SHARED GLOBALS — exported for Vanilla2, Vanilla3, Vanilla4
--- ════════════════════════════════════════════════════
-_G.VH = {
-    TweenService     = TweenService,
-    Players          = Players,
-    UserInputService = UserInputService,
-    RunService       = RunService,
-    TeleportService  = TeleportService,
-    Stats            = Stats,
-    player           = player,
-    cleanupTasks     = cleanupTasks,
-    pages            = pages,
-    tabs             = tabs,
-    BTN_COLOR        = BTN_COLOR,
-    BTN_HOVER        = BTN_HOVER,
-    THEME_TEXT       = THEME_TEXT,
-    switchTab        = switchTab,
-    toggleGUI        = toggleGUI,
-    stopFly          = stopFly,
-    startFly         = startFly,
-    butter           = { running = false, thread = nil },
-    flyToggleEnabled = flyToggleEnabled,
-    isFlyEnabled     = false,
-    currentFlyKey    = Enum.KeyCode.Q,
-    waitingForFlyKey = false,
-    flyKeyBtn        = flyKeyBtn,
-    currentToggleKey = currentToggleKey,
-    waitingForKeyGUI = waitingForKeyGUI,
-    keybindButtonGUI = nil,
-    -- Selection API (also consumed by Vanilla4 / Sorter)
-    Selection = {
-        GetParts        = GetSelectedParts,
-        GetGroups       = GetSelectionGroups,
-        Clear           = ClearAllSelection,
-        Select          = SelectPart,
-        Deselect        = DeselectPart,
-        isSortableItem  = isSortableItem,
-        itemName        = itemName,
-        resolveOwner    = resolveOwner,
-    },
+local AXIS_COLORS = {
+    X = Color3.fromRGB(220,70,70),
+    Y = Color3.fromRGB(70,200,70),
+    Z = Color3.fromRGB(70,120,255),
 }
 
-_G.VanillaHubCleanup = onExit
+local function mkIntSlider(label, axis, minV, maxV, defaultV, cb)
+    local axCol = AXIS_COLORS[axis] or THEME_TEXT
 
-print("[VanillaHub] Vanilla1 loaded")
+    local fr = Instance.new("Frame", sorterPage)
+    fr.Size = UDim2.new(1,-12,0,54)
+    fr.BackgroundColor3 = Color3.fromRGB(22,22,30)
+    fr.BorderSizePixel = 0
+    Instance.new("UICorner", fr).CornerRadius = UDim.new(0,6)
+
+    local axTag = Instance.new("TextLabel", fr)
+    axTag.Size = UDim2.new(0,18,0,22); axTag.Position = UDim2.new(0,8,0,5)
+    axTag.BackgroundTransparency = 1; axTag.Font = Enum.Font.GothamBold
+    axTag.TextSize = 14; axTag.TextColor3 = axCol; axTag.Text = axis
+
+    local topLbl = Instance.new("TextLabel", fr)
+    topLbl.Size = UDim2.new(0.55,0,0,22); topLbl.Position = UDim2.new(0,28,0,5)
+    topLbl.BackgroundTransparency = 1; topLbl.Font = Enum.Font.GothamSemibold
+    topLbl.TextSize = 12; topLbl.TextColor3 = THEME_TEXT
+    topLbl.TextXAlignment = Enum.TextXAlignment.Left; topLbl.Text = label
+
+    local valLbl = Instance.new("TextLabel", fr)
+    valLbl.Size = UDim2.new(0.3,0,0,22); valLbl.Position = UDim2.new(0.7,0,0,5)
+    valLbl.BackgroundTransparency = 1; valLbl.Font = Enum.Font.GothamBold
+    valLbl.TextSize = 13; valLbl.TextColor3 = axCol
+    valLbl.TextXAlignment = Enum.TextXAlignment.Right; valLbl.Text = tostring(defaultV)
+
+    local track = Instance.new("Frame", fr)
+    track.Size = UDim2.new(1,-16,0,6); track.Position = UDim2.new(0,8,0,36)
+    track.BackgroundColor3 = Color3.fromRGB(38,38,52); track.BorderSizePixel = 0
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
+
+    local fill = Instance.new("Frame", track)
+    fill.Size = UDim2.new((defaultV-minV)/(maxV-minV),0,1,0)
+    fill.BackgroundColor3 = axCol; fill.BorderSizePixel = 0
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1,0)
+
+    local knob = Instance.new("TextButton", track)
+    knob.Size = UDim2.new(0,18,0,18); knob.AnchorPoint = Vector2.new(0.5,0.5)
+    knob.Position = UDim2.new((defaultV-minV)/(maxV-minV),0,0.5,0)
+    knob.BackgroundColor3 = Color3.fromRGB(225,225,245); knob.Text = ""
+    knob.BorderSizePixel = 0
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1,0)
+
+    local dragging = false; local cur = defaultV
+
+    local function apply(screenX)
+        local ratio = math.clamp(
+            (screenX - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1),
+            0, 1)
+        local val = math.round(minV + ratio*(maxV-minV))
+        if val == cur then return end
+        cur = val
+        fill.Size     = UDim2.new(ratio,0,1,0)
+        knob.Position = UDim2.new(ratio,0,0.5,0)
+        valLbl.Text   = tostring(val)
+        if cb then cb(val) end
+    end
+
+    knob.MouseButton1Down:Connect(function() dragging = true end)
+    track.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true; apply(inp.Position.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(inp)
+        if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+            apply(inp.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    return fr
+end
+
+-- ════════════════════════════════════════════════════
+-- STATUS CARD
+-- ════════════════════════════════════════════════════
+local statusCard, statusLabel
+do
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1,-12,0,48)
+    card.BackgroundColor3 = Color3.fromRGB(28,20,38)
+    card.BorderSizePixel = 0
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0,8)
+    local stroke = Instance.new("UIStroke", card)
+    stroke.Color = Color3.fromRGB(255,180,0); stroke.Thickness = 1; stroke.Transparency = 0.5
+    local lbl = Instance.new("TextLabel", card)
+    lbl.Size = UDim2.new(1,-16,1,0); lbl.Position = UDim2.new(0,8,0,0)
+    lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 12
+    lbl.TextColor3 = Color3.fromRGB(255,210,100)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.TextWrapped = true
+    lbl.Text = "Select items to get started."
+    statusCard  = card
+    statusLabel = lbl
+end
+
+local function setStatus(msg, col)
+    statusLabel.Text       = msg
+    statusLabel.TextColor3 = col or Color3.fromRGB(255,210,100)
+end
+
+-- ════════════════════════════════════════════════════
+-- PROGRESS BAR
+-- ════════════════════════════════════════════════════
+local pbContainer, pbFill, pbLabel
+do
+    local pb = Instance.new("Frame")
+    pb.Size = UDim2.new(1,-12,0,44); pb.BackgroundColor3 = Color3.fromRGB(18,18,24)
+    pb.BorderSizePixel = 0; pb.Visible = false
+    Instance.new("UICorner", pb).CornerRadius = UDim.new(0,8)
+    local stroke = Instance.new("UIStroke", pb)
+    stroke.Color = Color3.fromRGB(60,60,80); stroke.Thickness = 1; stroke.Transparency = 0.5
+
+    local lbl = Instance.new("TextLabel", pb)
+    lbl.Size = UDim2.new(1,-12,0,16); lbl.Position = UDim2.new(0,6,0,4)
+    lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 11
+    lbl.TextColor3 = THEME_TEXT; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = "Sorting..."
+
+    local track = Instance.new("Frame", pb)
+    track.Size = UDim2.new(1,-12,0,12); track.Position = UDim2.new(0,6,0,26)
+    track.BackgroundColor3 = Color3.fromRGB(30,30,42); track.BorderSizePixel = 0
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1,0)
+
+    local fl = Instance.new("Frame", track)
+    fl.Size = UDim2.new(0,0,1,0); fl.BackgroundColor3 = Color3.fromRGB(255,175,55)
+    fl.BorderSizePixel = 0
+    Instance.new("UICorner", fl).CornerRadius = UDim.new(1,0)
+
+    pbContainer = pb; pbFill = fl; pbLabel = lbl
+end
+
+local function hideProgress(delay)
+    task.delay(delay or 2.0, function()
+        if not pbContainer then return end
+        TweenService:Create(pbContainer, TweenInfo.new(0.4), {BackgroundTransparency=1}):Play()
+        TweenService:Create(pbFill,      TweenInfo.new(0.4), {BackgroundTransparency=1}):Play()
+        TweenService:Create(pbLabel,     TweenInfo.new(0.4), {TextTransparency=1}):Play()
+        task.delay(0.45, function()
+            if not pbContainer then return end
+            pbContainer.Visible = false
+            pbContainer.BackgroundTransparency = 0
+            pbFill.BackgroundTransparency = 0
+            pbFill.BackgroundColor3 = Color3.fromRGB(255,175,55)
+            pbFill.Size = UDim2.new(0,0,1,0)
+            pbLabel.TextTransparency = 0
+        end)
+    end)
+end
+
+-- ════════════════════════════════════════════════════
+-- LASSO OVERLAY
+-- ════════════════════════════════════════════════════
+local coreGui    = game:GetService("CoreGui")
+local lassoFrame = Instance.new("Frame", coreGui:FindFirstChild("VanillaHub") or coreGui)
+lassoFrame.Name = "SorterLasso"
+lassoFrame.BackgroundColor3 = Color3.fromRGB(255,160,40)
+lassoFrame.BackgroundTransparency = 0.82
+lassoFrame.BorderSizePixel = 0
+lassoFrame.Visible = false
+lassoFrame.ZIndex  = 20
+local lstroke = Instance.new("UIStroke", lassoFrame)
+lstroke.Color = Color3.fromRGB(255,210,80); lstroke.Thickness = 1.5
+
+local function updateLassoVis(s, c)
+    local minX = math.min(s.X,c.X); local minY = math.min(s.Y,c.Y)
+    lassoFrame.Position = UDim2.new(0,minX,0,minY)
+    lassoFrame.Size     = UDim2.new(0,math.abs(c.X-s.X),0,math.abs(c.Y-s.Y))
+end
+
+local function selectLasso()
+    if not lassoStartPos then return end
+    local cur  = Vector2.new(mouse.X, mouse.Y)
+    local minX = math.min(lassoStartPos.X,cur.X); local maxX = math.max(lassoStartPos.X,cur.X)
+    local minY = math.min(lassoStartPos.Y,cur.Y); local maxY = math.max(lassoStartPos.Y,cur.Y)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and isSortableItem(obj) then
+            local mp2 = getMainPart(obj)
+            if mp2 then
+                local sp, vis = camera:WorldToScreenPoint(mp2.Position)
+                if vis and sp.X>=minX and sp.X<=maxX and sp.Y>=minY and sp.Y<=maxY then
+                    highlightItem(obj)
+                end
+            end
+        end
+    end
+end
+
+-- ════════════════════════════════════════════════════
+-- START / STOP (forward refs)
+-- ════════════════════════════════════════════════════
+local startBtn, stopBtn
+
+local function refreshStatus()
+    local n = countSelected()
+    if isSorting then
+        setStatus("⏳  Sorting in progress...", Color3.fromRGB(140,220,255))
+    elseif isStopped then
+        setStatus("⏸  Paused — hit Start to resume.", Color3.fromRGB(255,210,80))
+    elseif overflowBlocked then
+        setStatus("❌  Too many items! Increase X, Y, or Z then regenerate.", Color3.fromRGB(255,100,100))
+    elseif n == 0 then
+        setStatus("👆  Select items with Click, Group, or Lasso.")
+    elseif previewFollowing then
+        setStatus("🖱  Preview following mouse — click to place.", Color3.fromRGB(140,220,255))
+    elseif previewPlaced then
+        setStatus("✅  " .. n .. " item(s) ready. Hit Start Sorting!", Color3.fromRGB(100,220,120))
+    elseif previewPart then
+        setStatus("📦  Preview exists. Click anywhere to place it.", Color3.fromRGB(200,200,100))
+    else
+        setStatus("📦  " .. n .. " selected. Click Generate Preview.")
+    end
+
+    if startBtn then
+        local canSort = (n > 0 or isStopped)
+                        and (previewPlaced or isStopped)
+                        and not isSorting
+                        and not overflowBlocked
+        startBtn.BackgroundColor3 = canSort and Color3.fromRGB(35,100,50) or Color3.fromRGB(28,28,38)
+        startBtn.TextColor3       = canSort and THEME_TEXT or Color3.fromRGB(72,72,82)
+        startBtn.Text = isStopped and "▶  Resume Sorting" or "▶  Start Sorting"
+    end
+    if stopBtn then
+        stopBtn.BackgroundColor3 = isSorting and Color3.fromRGB(100,60,20) or Color3.fromRGB(28,28,38)
+        stopBtn.TextColor3       = isSorting and Color3.fromRGB(255,190,80) or Color3.fromRGB(72,72,82)
+    end
+end
+
+-- ════════════════════════════════════════════════════
+-- BUILD UI
+-- ════════════════════════════════════════════════════
+mkLabel("Status")
+statusCard.Parent = sorterPage
+
+mkSep()
+mkLabel("Selection Mode")
+
+mkToggle("Click Selection", false, function(v)
+    clickSelEnabled = v
+    if v then lassoEnabled = false; groupSelEnabled = false end
+end)
+mkToggle("Group Selection", false, function(v)
+    groupSelEnabled = v
+    if v then clickSelEnabled = false; lassoEnabled = false end
+end)
+mkToggle("Lasso Tool", false, function(v)
+    lassoEnabled = v
+    if v then clickSelEnabled = false; groupSelEnabled = false end
+end)
+
+local selHint = Instance.new("TextLabel", sorterPage)
+selHint.Size = UDim2.new(1,-12,0,26); selHint.BackgroundColor3 = Color3.fromRGB(18,18,24)
+selHint.BorderSizePixel = 0; selHint.Font = Enum.Font.Gotham; selHint.TextSize = 11
+selHint.TextColor3 = Color3.fromRGB(100,100,130); selHint.TextWrapped = true
+selHint.TextXAlignment = Enum.TextXAlignment.Left
+selHint.Text = "  Lasso: drag to box-select.  Group: click to select all of same type."
+Instance.new("UICorner", selHint).CornerRadius = UDim.new(0,6)
+Instance.new("UIPadding", selHint).PaddingLeft = UDim.new(0,6)
+
+-- Clear Selection lives right under Selection Mode
+mkBtn("Clear Selection", BTN_COLOR, function()
+    unhighlightAll(); refreshStatus()
+end)
+
+mkSep()
+mkLabel("Sort Grid  —  X  Width · Y  Height · Z  Depth")
+
+mkIntSlider("Width  (items per row)", "X", 1, 12, 3, function(v)
+    gridCols = v
+    overflowBlocked = false
+    if overflowPopup then overflowPopup.Visible = false end
+    if previewFollowing and previewPart and previewPart.Parent then
+        local sX, sY, sZ = computePreviewSize()
+        previewPart.Size = Vector3.new(math.max(sX,0.5), math.max(sY,0.5), math.max(sZ,0.5))
+    end
+end)
+
+-- Y height capped at 5
+mkIntSlider("Height  (vertical layers)", "Y", 1, 5, 1, function(v)
+    gridLayers = v
+    overflowBlocked = false
+    if overflowPopup then overflowPopup.Visible = false end
+    if previewFollowing and previewPart and previewPart.Parent then
+        local sX, sY, sZ = computePreviewSize()
+        previewPart.Size = Vector3.new(math.max(sX,0.5), math.max(sY,0.5), math.max(sZ,0.5))
+    end
+end)
+
+mkIntSlider("Depth  (rows, 0=auto)", "Z", 0, 12, 0, function(v)
+    gridRows = v
+    overflowBlocked = false
+    if overflowPopup then overflowPopup.Visible = false end
+    if previewFollowing and previewPart and previewPart.Parent then
+        local sX, sY, sZ = computePreviewSize()
+        previewPart.Size = Vector3.new(math.max(sX,0.5), math.max(sY,0.5), math.max(sZ,0.5))
+    end
+end)
+
+local gridHint = Instance.new("TextLabel", sorterPage)
+gridHint.Size = UDim2.new(1,-12,0,28); gridHint.BackgroundColor3 = Color3.fromRGB(18,18,24)
+gridHint.BorderSizePixel = 0; gridHint.Font = Enum.Font.Gotham; gridHint.TextSize = 11
+gridHint.TextColor3 = Color3.fromRGB(100,100,130); gridHint.TextWrapped = true
+gridHint.TextXAlignment = Enum.TextXAlignment.Left
+gridHint.Text = "  Fills left→right (X), front→back (Z), bottom→top (Y). Tallest items first. Z=0 auto."
+Instance.new("UICorner", gridHint).CornerRadius = UDim.new(0,6)
+Instance.new("UIPadding", gridHint).PaddingLeft = UDim.new(0,6)
+
+-- Overflow warning popup
+local overflowPopup, overflowLabel
+do
+    local pop = Instance.new("Frame")
+    pop.Size = UDim2.new(1,-12,0,52)
+    pop.BackgroundColor3 = Color3.fromRGB(80,20,20)
+    pop.BorderSizePixel = 0; pop.Visible = false
+    Instance.new("UICorner", pop).CornerRadius = UDim.new(0,8)
+    local stroke = Instance.new("UIStroke", pop)
+    stroke.Color = Color3.fromRGB(255,80,80); stroke.Thickness = 1.5; stroke.Transparency = 0.3
+    local lbl = Instance.new("TextLabel", pop)
+    lbl.Size = UDim2.new(1,-16,1,0); lbl.Position = UDim2.new(0,8,0,0)
+    lbl.BackgroundTransparency = 1; lbl.Font = Enum.Font.GothamSemibold; lbl.TextSize = 12
+    lbl.TextColor3 = Color3.fromRGB(255,140,140)
+    lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.TextWrapped = true
+    lbl.Text = ""
+    overflowPopup = pop
+    overflowLabel = lbl
+end
+overflowPopup.Parent = sorterPage
+
+local function showOverflow(msg)
+    overflowBlocked = true
+    overflowLabel.Text = "⚠  " .. msg
+    overflowPopup.Visible = true
+end
+
+local function hideOverflow()
+    overflowBlocked = false
+    overflowPopup.Visible = false
+end
+
+local function gridCapacity()
+    local cols   = math.max(1, gridCols)
+    local layers = math.max(1, gridLayers)
+    local rows   = math.max(0, gridRows)
+    if rows == 0 then return math.huge end
+    return cols * rows * layers
+end
+
+mkSep()
+mkLabel("Preview")
+
+mkBtn("Generate Preview  (follows mouse)", Color3.fromRGB(35,55,100), function()
+    if countSelected() == 0 then
+        setStatus("⚠  No items selected!"); return
+    end
+    local n   = countSelected()
+    local cap = gridCapacity()
+    if n > cap then
+        showOverflow(n .. " items but grid only fits " .. cap ..
+            "  (X=" .. gridCols .. " × Z=" .. gridRows .. " × Y=" .. gridLayers ..
+            "). Increase sliders.")
+        refreshStatus(); return
+    end
+    hideOverflow()
+    local sX, sY, sZ = computePreviewSize()
+    buildPreviewBox(sX, sY, sZ)
+    startPreviewFollow()
+    refreshStatus()
+end)
+
+mkBtn("Clear Preview", BTN_COLOR, function()
+    destroyPreview(); refreshStatus()
+end)
+
+mkSep()
+mkLabel("Actions")
+
+-- ════════════════════════════════════════════════════
+-- START BUTTON
+-- ════════════════════════════════════════════════════
+startBtn = Instance.new("TextButton", sorterPage)
+startBtn.Size = UDim2.new(1,-12,0,36)
+startBtn.BackgroundColor3 = Color3.fromRGB(28,28,38)
+startBtn.Text = "▶  Start Sorting"; startBtn.Font = Enum.Font.GothamBold
+startBtn.TextSize = 14; startBtn.TextColor3 = Color3.fromRGB(72,72,82)
+startBtn.BorderSizePixel = 0
+Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0,6)
+
+-- ────────────────────────────────────────────────────
+-- CORE SORT LOOP
+--
+-- Strategy:
+--   1. Items are pre-sorted so a full layer is placed before the next begins.
+--   2. Each slot gets up to SLOT_RETRY_MAX attempts via placeAndLock().
+--      placeAndLock drives + holds the item until it accumulates STABLE_NEEDED
+--      consecutive stable frames — so a single server-snap can't fool it.
+--   3. At every layer boundary we sweep all completed slots and re-fix any
+--      that drifted while we were placing later items.
+-- ────────────────────────────────────────────────────
+local function runSortLoop(slots, startI, total, doneStart)
+    local done = doneStart
+
+    sortThread = task.spawn(function()
+        local i           = startI
+        local prevLayer   = slots[startI] and slots[startI].layer or 0
+
+        while i <= total and isSorting do
+            local slot = slots[i]
+
+            -- ── Layer boundary: sweep all previous slots for drift ──
+            local curLayer = slot.layer or 0
+            if curLayer > prevLayer then
+                pbLabel.Text = "🔍 Checking layer " .. prevLayer .. "..."
+                fixDriftedSlots(slots, i - 1)
+                prevLayer = curLayer
+                if not isSorting then sortIndex = i; break end
+            end
+
+            -- ── Skip if item is gone ──
+            if not (slot.model and slot.model.Parent) then
+                done = done + 1; sortDone = done; sortIndex = i + 1
+                i = i + 1; continue
+            end
+
+            pbLabel.Text = "Sorting... " .. done .. " / " .. total
+
+            -- ── Try to lock this slot ──
+            local locked = false
+            for attempt = 1, SLOT_RETRY_MAX do
+                if not isSorting then break end
+                pbLabel.Text = "Sorting " .. done+1 .. "/" .. total
+                    .. (attempt > 1 and ("  (retry " .. attempt .. ")") or "")
+
+                locked = placeAndLock(slot.model, slot.cf)
+
+                if not isSorting then break end
+
+                -- Double-check after a brief settle
+                task.wait(0.15)
+                if isSlotFilled(slot) then
+                    locked = true; break
+                end
+                -- Didn't stay — immediately retry
+                locked = false
+            end
+
+            if not isSorting then sortIndex = i; break end
+
+            -- Advance regardless (we tried our best)
+            unhighlightItem(slot.model)
+            done = done + 1; sortDone = done; sortIndex = i + 1
+
+            local pct = math.clamp(done / math.max(total, 1), 0, 1)
+            TweenService:Create(pbFill, TweenInfo.new(0.15, Enum.EasingStyle.Quad),
+                { Size = UDim2.new(pct, 0, 1, 0) }):Play()
+            pbLabel.Text = "Sorting... " .. done .. " / " .. total
+
+            task.wait(0.25)
+            i = i + 1
+        end
+
+        -- Final sweep of all slots to catch any last-minute drift
+        if isSorting and done >= total then
+            pbLabel.Text = "🔍 Final check..."
+            fixDriftedSlots(slots, total)
+        end
+
+        isSorting = false
+        sortThread = nil
+
+        if done >= total then
+            isStopped = false; sortSlots = nil
+            TweenService:Create(pbFill, TweenInfo.new(0.25),
+                { Size = UDim2.new(1,0,1,0), BackgroundColor3 = Color3.fromRGB(90,220,110) }):Play()
+            pbLabel.Text = "✔  Sorting complete!"
+            destroyPreview(); unhighlightAll(); hideProgress(2.5)
+        else
+            isStopped = true
+            pbLabel.Text = "⏸  Stopped at " .. done .. " / " .. total
+        end
+        refreshStatus()
+    end)
+end
+
+startBtn.MouseButton1Click:Connect(function()
+    if isSorting then return end
+    if overflowBlocked then setStatus("❌  Fix grid size first!"); return end
+
+    -- RESUME
+    if isStopped and sortSlots then
+        isStopped = false
+        isSorting = true
+        pbContainer.Visible = true
+        pbFill.BackgroundColor3 = Color3.fromRGB(255,175,55)
+        pbLabel.Text = "Sorting... " .. sortDone .. " / " .. sortTotal
+        refreshStatus()
+        runSortLoop(sortSlots, sortIndex, sortTotal, sortDone)
+        return
+    end
+
+    -- FRESH START
+    if not (previewPlaced and previewPart and previewPart.Parent) then
+        setStatus("⚠  Generate a preview and place it first!"); return
+    end
+    if countSelected() == 0 then setStatus("⚠  No items selected!"); return end
+
+    local items = {}
+    for model in pairs(selectedItems) do
+        if model and model.Parent then table.insert(items, model) end
+    end
+    if #items == 0 then return end
+
+    local anchorCF = previewPart.CFrame
+        * CFrame.new(-previewPart.Size.X/2, -previewPart.Size.Y/2, -previewPart.Size.Z/2)
+
+    sortSlots = calculateSlots(items, anchorCF, gridCols, gridLayers, gridRows)
+    sortTotal = #sortSlots
+    sortDone  = 0
+    sortIndex = 1
+    isStopped = false
+    isSorting = true
+
+    pbContainer.Visible = true
+    pbFill.Size = UDim2.new(0,0,1,0)
+    pbFill.BackgroundColor3 = Color3.fromRGB(255,175,55)
+    pbLabel.Text = "Sorting... 0 / " .. sortTotal
+    refreshStatus()
+    runSortLoop(sortSlots, 1, sortTotal, 0)
+end)
+
+-- ════════════════════════════════════════════════════
+-- STOP BUTTON
+-- ════════════════════════════════════════════════════
+stopBtn = Instance.new("TextButton", sorterPage)
+stopBtn.Size = UDim2.new(1,-12,0,32)
+stopBtn.BackgroundColor3 = Color3.fromRGB(28,28,38)
+stopBtn.Text = "⏹  Stop"; stopBtn.Font = Enum.Font.GothamBold
+stopBtn.TextSize = 13; stopBtn.TextColor3 = Color3.fromRGB(72,72,82)
+stopBtn.BorderSizePixel = 0
+Instance.new("UICorner", stopBtn).CornerRadius = UDim.new(0,6)
+stopBtn.MouseButton1Click:Connect(function()
+    if not isSorting then return end
+    isSorting = false
+    pbLabel.Text = "⏸  Stopping..."
+    refreshStatus()
+end)
+
+-- Cancel — stop + clear everything
+mkBtn("Cancel  (clear all)", Color3.fromRGB(70,20,20), function()
+    isSorting = false
+    isStopped = false
+    sortSlots = nil
+    sortIndex = 1
+    sortTotal = 0
+    sortDone  = 0
+    if sortThread then pcall(task.cancel, sortThread); sortThread = nil end
+    destroyPreview()
+    unhighlightAll()
+    hideOverflow()
+    pbLabel.Text = "Cancelled."
+    hideProgress(1.0)
+    refreshStatus()
+end)
+
+pbContainer.Parent = sorterPage
+
+-- ════════════════════════════════════════════════════
+-- MOUSE INPUT
+-- ════════════════════════════════════════════════════
+local mouseDownConn = mouse.Button1Down:Connect(function()
+    -- Lasso start
+    if lassoEnabled then
+        lassoDragging      = true
+        lassoStartPos      = Vector2.new(mouse.X, mouse.Y)
+        lassoFrame.Size    = UDim2.new(0,0,0,0)
+        lassoFrame.Visible = true
+        return
+    end
+
+    -- Place preview on left-click while following
+    if previewFollowing then
+        placePreview()
+        refreshStatus()
+        return
+    end
+
+    -- Normal item selection
+    local target = mouse.Target
+    if not target then return end
+    local model = target:FindFirstAncestorOfClass("Model")
+    if not model then return end
+
+    if clickSelEnabled and isSortableItem(model) then
+        if selectedItems[model] then unhighlightItem(model) else highlightItem(model) end
+        refreshStatus()
+    elseif groupSelEnabled and isSortableItem(model) then
+        groupSelectItem(model)
+        refreshStatus()
+    end
+end)
+
+local mouseMoveConn = mouse.Move:Connect(function()
+    if lassoDragging and lassoEnabled and lassoStartPos then
+        updateLassoVis(lassoStartPos, Vector2.new(mouse.X, mouse.Y))
+    end
+end)
+
+local mouseUpConn = mouse.Button1Up:Connect(function()
+    if lassoDragging and lassoEnabled and lassoStartPos then
+        lassoDragging = false
+        selectLasso()
+        lassoFrame.Visible = false
+        lassoStartPos = nil
+        refreshStatus()
+    end
+    lassoDragging = false
+end)
+
+-- ════════════════════════════════════════════════════
+-- CLEANUP
+-- ════════════════════════════════════════════════════
+table.insert(cleanupTasks, function()
+    isSorting = false; isStopped = false
+    sortSlots = nil; sortIndex = 1; sortTotal = 0; sortDone = 0
+    if followConn  then followConn:Disconnect();             followConn = nil end
+    if sortThread  then pcall(task.cancel, sortThread);      sortThread = nil end
+    mouseDownConn:Disconnect()
+    mouseMoveConn:Disconnect()
+    mouseUpConn:Disconnect()
+    if lassoFrame and lassoFrame.Parent then lassoFrame:Destroy() end
+    destroyPreview()
+    unhighlightAll()
+end)
+
+refreshStatus()
+print("[VanillaHub] Vanilla4 (Sorter v2) loaded")
