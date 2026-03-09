@@ -866,19 +866,18 @@ local clickSelectionEnabled = false
 local lassoEnabled          = false
 local groupSelectionEnabled = false
 
--- handleSelection: called on click for click-mode and group-mode
-local function handleSelection(target)
+local function handleSelection(target, forceSelect)
     if not target then return end
     local model = target:FindFirstAncestorOfClass("Model")
     if not (model and isMoveableItem(model)) then return end
-
     if groupSelectionEnabled then
         local ownerVal = getOwner(model)
-        local cat      = getItemCategory(model)
+        local cat = getItemCategory(model)
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("Model") and isMoveableItem(obj) then
-                if getItemCategory(obj) == cat then
-                    local objOwner   = getOwner(obj)
+                local objCat = getItemCategory(obj)
+                if objCat == cat then
+                    local objOwner = getOwner(obj)
                     local ownerMatch = true
                     if ownerVal ~= nil and objOwner ~= nil then
                         ownerMatch = tostring(ownerVal) == tostring(objOwner)
@@ -888,8 +887,11 @@ local function handleSelection(target)
             end
         end
     else
-        -- Click selection: toggle individual item
-        if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
+        if forceSelect then
+            highlightModel(model)
+        else
+            if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
+        end
     end
 end
 
@@ -944,7 +946,7 @@ mouse.Button1Down:Connect(function()
         lassoFrame.Size = UDim2.new(0,0,0,0)
         lassoFrame.Visible = true
     elseif clickSelectionEnabled or groupSelectionEnabled then
-        handleSelection(mouse.Target)
+        handleSelection(mouse.Target, false)
     end
 end)
 
