@@ -13,7 +13,6 @@ end
 
 -- Nuke leftover _G.VH table completely
 if _G.VH then
-    -- Cancel any running dupe thread
     if _G.VH.butter and _G.VH.butter.running then
         _G.VH.butter.running = false
         if _G.VH.butter.thread then pcall(task.cancel, _G.VH.butter.thread) end
@@ -105,7 +104,6 @@ local TeleportService  = game:GetService("TeleportService")
 local Stats            = game:GetService("Stats")
 local player           = Players.LocalPlayer
 
--- Shared theme color
 local THEME_TEXT = Color3.fromRGB(230, 206, 226)
 
 -- ════════════════════════════════════════════════════
@@ -127,9 +125,7 @@ local function onExit()
         end
     end
 
-    for _, fn in ipairs(cleanupTasks) do
-        pcall(fn)
-    end
+    for _, fn in ipairs(cleanupTasks) do pcall(fn) end
     cleanupTasks = {}
 
     pcall(function()
@@ -184,17 +180,31 @@ end)
 
 _G.VanillaHubCleanup = onExit
 
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 0, 0, 0)
-main.Position = UDim2.new(0.5, -260, 0.5, -170)
+-- OUTER WRAPPER (no ClipsDescendants — dialog parents here so it isn't clipped)
+local wrapper = Instance.new("Frame", gui)
+wrapper.Size = UDim2.new(0, 0, 0, 0)
+wrapper.Position = UDim2.new(0.5, -260, 0.5, -170)
+wrapper.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+wrapper.BackgroundTransparency = 1
+wrapper.BorderSizePixel = 0
+wrapper.ClipsDescendants = false
+Instance.new("UICorner", wrapper).CornerRadius = UDim.new(0, 12)
+
+-- MAIN (clips content)
+local main = Instance.new("Frame", wrapper)
+main.Size = UDim2.new(1, 0, 1, 0)
+main.Position = UDim2.new(0, 0, 0, 0)
 main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 main.BackgroundTransparency = 1
 main.BorderSizePixel = 0
 main.ClipsDescendants = true
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
-TweenService:Create(main, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+TweenService:Create(wrapper, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 520, 0, 340),
+    BackgroundTransparency = 0
+}):Play()
+TweenService:Create(main, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     BackgroundTransparency = 0
 }):Play()
 
@@ -219,7 +229,7 @@ local titleLbl = Instance.new("TextLabel", topBar)
 titleLbl.Size = UDim2.new(1, -90, 1, 0)
 titleLbl.Position = UDim2.new(0, 42, 0, 0)
 titleLbl.BackgroundTransparency = 1
-titleLbl.Text = "VanillaHub | Lt2"
+titleLbl.Text = "VanillaHub"
 titleLbl.Font = Enum.Font.GothamBold
 titleLbl.TextSize = 17
 titleLbl.TextColor3 = THEME_TEXT
@@ -238,16 +248,22 @@ closeBtn.BorderSizePixel = 0
 closeBtn.ZIndex = 5
 Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
 
+-- ════════════════════════════════════════════════════
 -- CONFIRM CLOSE DIALOG
+-- FIX: parented to gui (root ScreenGui), NOT main.
+-- main has ClipsDescendants=true which was hiding the dialog.
+-- ════════════════════════════════════════════════════
 local function showConfirmClose()
-    if main:FindFirstChild("ConfirmOverlay") then return end
-    local overlay = Instance.new("Frame", main)
+    if gui:FindFirstChild("ConfirmOverlay") then return end
+
+    local overlay = Instance.new("Frame", gui)
     overlay.Name = "ConfirmOverlay"
     overlay.Size = UDim2.new(1, 0, 1, 0)
     overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
     overlay.BackgroundTransparency = 0.4
     overlay.ZIndex = 9
-    local dialog = Instance.new("Frame", main)
+
+    local dialog = Instance.new("Frame", gui)
     dialog.Name = "ConfirmDialog"
     dialog.Size = UDim2.new(0, 360, 0, 180)
     dialog.Position = UDim2.new(0.5, -180, 0.5, -90)
@@ -259,6 +275,7 @@ local function showConfirmClose()
     dStroke.Color = Color3.fromRGB(90, 90, 100)
     dStroke.Thickness = 1.2
     dStroke.Transparency = 0.6
+
     local dtitle = Instance.new("TextLabel", dialog)
     dtitle.Size = UDim2.new(1, 0, 0, 40)
     dtitle.BackgroundTransparency = 1
@@ -267,6 +284,7 @@ local function showConfirmClose()
     dtitle.TextColor3 = THEME_TEXT
     dtitle.Text = "Confirm Exit"
     dtitle.ZIndex = 11
+
     local dmsg = Instance.new("TextLabel", dialog)
     dmsg.Size = UDim2.new(1, -40, 0, 60)
     dmsg.Position = UDim2.new(0, 20, 0, 45)
@@ -278,6 +296,7 @@ local function showConfirmClose()
     dmsg.TextWrapped = true
     dmsg.TextYAlignment = Enum.TextYAlignment.Center
     dmsg.ZIndex = 11
+
     local cancelBtn2 = Instance.new("TextButton", dialog)
     cancelBtn2.Size = UDim2.new(0, 150, 0, 46)
     cancelBtn2.Position = UDim2.new(0.5, -160, 1, -65)
@@ -288,6 +307,7 @@ local function showConfirmClose()
     cancelBtn2.TextColor3 = THEME_TEXT
     cancelBtn2.ZIndex = 11
     Instance.new("UICorner", cancelBtn2).CornerRadius = UDim.new(0, 10)
+
     local confirmBtn2 = Instance.new("TextButton", dialog)
     confirmBtn2.Size = UDim2.new(0, 150, 0, 46)
     confirmBtn2.Position = UDim2.new(0.5, 10, 1, -65)
@@ -298,6 +318,7 @@ local function showConfirmClose()
     confirmBtn2.TextColor3 = Color3.fromRGB(255, 255, 255)
     confirmBtn2.ZIndex = 11
     Instance.new("UICorner", confirmBtn2).CornerRadius = UDim.new(0, 10)
+
     for _, b in {cancelBtn2, confirmBtn2} do
         b.MouseEnter:Connect(function()
             TweenService:Create(b, TweenInfo.new(0.15), {
@@ -310,11 +331,18 @@ local function showConfirmClose()
             }):Play()
         end)
     end
-    cancelBtn2.MouseButton1Click:Connect(function() overlay:Destroy(); dialog:Destroy() end)
+
+    local function closeDialog()
+        if overlay and overlay.Parent then overlay:Destroy() end
+        if dialog  and dialog.Parent  then dialog:Destroy()  end
+    end
+
+    cancelBtn2.MouseButton1Click:Connect(closeDialog)
+
     confirmBtn2.MouseButton1Click:Connect(function()
-        overlay:Destroy(); dialog:Destroy()
+        closeDialog()
         onExit()
-        local t = TweenService:Create(main, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        local t = TweenService:Create(wrapper, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
             Size = UDim2.new(0, 0, 0, 0),
             BackgroundTransparency = 1
         })
@@ -331,13 +359,13 @@ closeBtn.MouseButton1Click:Connect(showConfirmClose)
 local dragging, dragStart, startPos = false, nil, nil
 topBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true; dragStart = input.Position; startPos = main.Position
+        dragging = true; dragStart = input.Position; startPos = wrapper.Position
     end
 end)
 UserInputService.InputChanged:Connect(function(input)
     if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
         local delta = input.Position - dragStart
-        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        wrapper.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
 end)
 UserInputService.InputEnded:Connect(function(input)
@@ -471,19 +499,54 @@ for _, name in ipairs(tabs) do
     btn.TextSize = 14
     btn.TextColor3 = Color3.fromRGB(160,160,160)
     btn.TextXAlignment = Enum.TextXAlignment.Left
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     local pad = Instance.new("UIPadding", btn)
     pad.PaddingLeft = UDim.new(0, 16)
+
+    local rippleContainer = Instance.new("Frame", btn)
+    rippleContainer.Size = UDim2.new(1, 0, 1, 0)
+    rippleContainer.BackgroundTransparency = 1
+    rippleContainer.BorderSizePixel = 0
+    rippleContainer.ZIndex = 2
+    rippleContainer.ClipsDescendants = true
+    Instance.new("UICorner", rippleContainer).CornerRadius = UDim.new(0, 6)
+
     btn.MouseEnter:Connect(function()
         if activeTabButton ~= btn then
-            TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(28,28,28), TextColor3 = THEME_TEXT}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.18), {
+                BackgroundColor3 = Color3.fromRGB(30,30,38),
+                TextColor3 = Color3.fromRGB(200, 185, 200)
+            }):Play()
         end
     end)
     btn.MouseLeave:Connect(function()
         if activeTabButton ~= btn then
-            TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(18,18,18), TextColor3 = Color3.fromRGB(160,160,160)}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.18), {
+                BackgroundColor3 = Color3.fromRGB(18,18,18),
+                TextColor3 = Color3.fromRGB(160,160,160)
+            }):Play()
         end
     end)
-    btn.MouseButton1Click:Connect(function() switchTab(name.."Tab") end)
+
+    btn.MouseButton1Click:Connect(function()
+        task.spawn(function()
+            local ripple = Instance.new("Frame", rippleContainer)
+            ripple.Size = UDim2.new(0, 8, 0, 8)
+            ripple.Position = UDim2.new(0.5, -4, 0.5, -4)
+            ripple.BackgroundColor3 = Color3.fromRGB(200, 185, 200)
+            ripple.BackgroundTransparency = 0.75
+            ripple.BorderSizePixel = 0
+            Instance.new("UICorner", ripple).CornerRadius = UDim.new(1, 0)
+            TweenService:Create(ripple, TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.new(0, 140, 0, 140),
+                Position = UDim2.new(0.5, -70, 0.5, -70),
+                BackgroundTransparency = 1.0
+            }):Play()
+            task.wait(0.4)
+            if ripple and ripple.Parent then ripple:Destroy() end
+        end)
+        switchTab(name.."Tab")
+    end)
 end
 
 switchTab("HomeTab")
@@ -502,20 +565,27 @@ local function toggleGUI()
     guiOpen = not guiOpen
     isAnimatingGUI = true
     if guiOpen then
-        main.Visible = true
-        main.Size = UDim2.new(0,0,0,0)
+        wrapper.Visible = true
+        main.Visible    = true
+        wrapper.Size                = UDim2.new(0, 0, 0, 0)
+        wrapper.BackgroundTransparency = 1
+        main.Size                   = UDim2.new(0, 0, 0, 0)
         main.BackgroundTransparency = 1
-        local t = TweenService:Create(main, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0
-        })
+        local ti = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        TweenService:Create(wrapper, ti, {Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0}):Play()
+        local t = TweenService:Create(main, ti, {Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0})
         t:Play()
         t.Completed:Connect(function() isAnimatingGUI = false end)
     else
-        local t = TweenService:Create(main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1
-        })
+        local ti = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        TweenService:Create(wrapper, ti, {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1}):Play()
+        local t = TweenService:Create(main, ti, {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1})
         t:Play()
-        t.Completed:Connect(function() main.Visible = false; isAnimatingGUI = false end)
+        t.Completed:Connect(function()
+            wrapper.Visible = false
+            main.Visible    = false
+            isAnimatingGUI  = false
+        end)
     end
 end
 
@@ -550,13 +620,6 @@ iconName.TextSize           = 10
 iconName.TextColor3         = THEME_TEXT
 iconName.TextXAlignment     = Enum.TextXAlignment.Center
 iconName.Text               = "Vanilla"
-
-local bubbleTail = Instance.new("ImageLabel", bubbleRow)
-bubbleTail.Size               = UDim2.new(0, 14, 0, 20)
-bubbleTail.Position           = UDim2.new(0, 62, 0.5, -10)
-bubbleTail.BackgroundTransparency = 1
-bubbleTail.Image              = "rbxassetid://0"
-bubbleTail.Visible            = false
 
 local tailShape = Instance.new("Frame", bubbleRow)
 tailShape.Size               = UDim2.new(0, 14, 0, 14)
@@ -644,12 +707,14 @@ rejoinBtn.Font = Enum.Font.Gotham; rejoinBtn.TextSize = 14
 rejoinBtn.TextColor3 = THEME_TEXT; rejoinBtn.Text = "Rejoin"
 Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0, 8)
 rejoinBtn.MouseEnter:Connect(function()
-    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(35,35,45), TextColor3 = THEME_TEXT}):Play()
+    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(35,35,45)}):Play()
 end)
 rejoinBtn.MouseLeave:Connect(function()
-    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(22,22,28), TextColor3 = THEME_TEXT}):Play()
+    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(22,22,28)}):Play()
 end)
-rejoinBtn.MouseButton1Click:Connect(function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end)
+rejoinBtn.MouseButton1Click:Connect(function()
+    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+end)
 
 local pingConn = RunService.Heartbeat:Connect(function()
     local ok, ping = pcall(function() return math.round(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
@@ -713,15 +778,287 @@ if itemList then itemList.Padding = UDim.new(0, 6) end
 local BTN_COLOR = Color3.fromRGB(45, 45, 50)
 local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 
-local clickSelection = false
-local lassoTool = false
-local groupSelection = false
-local selectedItems = {}
-local tpCircle = nil
+-- ════════════════════════════════════════════════════
+-- SELECTION SYSTEM
+--
+-- All three modes (click, lasso, group) scan ONLY workspace.PlayerModels.
+-- That is the single container LT2 uses for every player-owned moveable
+-- object (logs, sawn wood, items, gifts). Trees, trucks, land, ground,
+-- and the map are never inside PlayerModels, so they can never be selected.
+--
+-- Shared state: selectedItems = { [Model] = SelectionBox }
+-- ClearAllSelection() wipes the whole table regardless of which mode
+-- added entries.
+-- ════════════════════════════════════════════════════
+local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
+
+-- Returns the PlayerModels folder, or nil if it doesn't exist yet
+local function getPlayerModels()
+    return workspace:FindFirstChild("PlayerModels")
+end
+
+-- Owner key: a stable string we can compare across models
+local function ownerKey(model)
+    local ov = model:FindFirstChild("Owner")
+    if not ov then return nil end
+    if ov:IsA("ObjectValue") and ov.Value then
+        return tostring(ov.Value.UserId)   -- Player UserId → "12345"
+    elseif ov:IsA("StringValue") then
+        return ov.Value                    -- plain name string
+    end
+    return nil
+end
+
+-- Item name: prefer the ItemName StringValue, fall back to model.Name
+local function itemName(model)
+    local iv = model:FindFirstChild("ItemName")
+    if iv and iv:IsA("StringValue") and iv.Value ~= "" then
+        return iv.Value
+    end
+    return model.Name
+end
+
+-- ── Shared selection state ─────────────────────────────────────────────────
+local selectedItems = {}   -- [Model] = SelectionBox
+
+local function highlightModel(model)
+    if selectedItems[model] then return end
+    local sb = Instance.new("SelectionBox")
+    sb.Color3        = SELECTION_COLOR
+    sb.LineThickness = 0.05
+    sb.Adornee       = model
+    sb.Parent        = model
+    selectedItems[model] = sb
+end
+
+local function unhighlightModel(model)
+    local sb = selectedItems[model]
+    if sb then pcall(function() sb:Destroy() end) end
+    selectedItems[model] = nil
+end
+
+local function ClearAllSelection()
+    for _, sb in pairs(selectedItems) do
+        pcall(function() sb:Destroy() end)
+    end
+    selectedItems = {}
+end
+
+local function GetSelectedParts()
+    local t = {}
+    for model in pairs(selectedItems) do table.insert(t, model) end
+    return t
+end
+
+local function GetSelectionGroups()
+    local groups = {}
+    for model in pairs(selectedItems) do
+        local key = itemName(model) .. "|" .. tostring(ownerKey(model))
+        groups[key] = groups[key] or {}
+        table.insert(groups[key], model)
+    end
+    return groups
+end
+
+-- Aliases used by teleport code
+local function SelectPart(model)   highlightModel(model)   end
+local function DeselectPart(model) unhighlightModel(model) end
+
+-- ── Lasso overlay frame ────────────────────────────────────────────────────
+local lassoFrame = Instance.new("Frame", gui)
+lassoFrame.Name                   = "LassoRect"
+lassoFrame.BackgroundColor3       = Color3.fromRGB(25, 117, 255)
+lassoFrame.BackgroundTransparency = 0.75
+lassoFrame.BorderColor3           = Color3.fromRGB(23, 35, 200)
+lassoFrame.BorderSizePixel        = 2
+lassoFrame.Visible                = false
+lassoFrame.ZIndex                 = 20
+
+local mouse  = player:GetMouse()
+local camera = workspace.CurrentCamera
+
+-- ── Click selection ────────────────────────────────────────────────────────
+-- Walks up from the clicked part to find its parent Model, then checks
+-- that parent Model is a direct child of PlayerModels (one level deep).
+local function HandleClickSelection()
+    local target = mouse.Target
+    if not target then return end
+    local pm = getPlayerModels()
+    if not pm then return end
+    -- The model we want is the direct child of PlayerModels
+    local model = target:FindFirstAncestorOfClass("Model")
+    while model do
+        if model.Parent == pm then break end
+        model = model.Parent:IsA("Model") and model.Parent or nil
+    end
+    if not model then return end
+    -- Toggle
+    if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
+end
+
+-- ── Group selection ────────────────────────────────────────────────────────
+-- Clicks a model → reads its ItemName and Owner → selects every model
+-- inside PlayerModels that shares BOTH values exactly.
+local function HandleGroupSelection()
+    local target = mouse.Target
+    if not target then return end
+    local pm = getPlayerModels()
+    if not pm then return end
+
+    -- Find the direct-child-of-PlayerModels model that was clicked
+    local model = target:FindFirstAncestorOfClass("Model")
+    while model do
+        if model.Parent == pm then break end
+        model = model.Parent:IsA("Model") and model.Parent or nil
+    end
+    if not model then return end
+
+    local clickedName  = itemName(model)
+    local clickedOwner = ownerKey(model)   -- may be nil if no Owner value
+
+    for _, obj in ipairs(pm:GetChildren()) do
+        if obj:IsA("Model") then
+            -- Name must match
+            if itemName(obj) ~= clickedName then continue end
+            -- Owner must match (both nil = no owner info, still match)
+            local objOwner = ownerKey(obj)
+            if clickedOwner ~= nil and objOwner ~= nil then
+                if clickedOwner ~= objOwner then continue end
+            end
+            highlightModel(obj)
+        end
+    end
+end
+
+-- ── Lasso selection ────────────────────────────────────────────────────────
+-- Rectangle is drawn per-frame (visual only, no scanning).
+-- A single scan of PlayerModels happens once when the mouse is released.
+local lassoActive   = false
+local lassoOriginX  = 0
+local lassoOriginY  = 0
+local lassoRenderConn
+
+local function FinaliseLasso()
+    local ax   = lassoFrame.AbsolutePosition.X
+    local ay   = lassoFrame.AbsolutePosition.Y
+    local minX = math.min(ax, ax + lassoFrame.AbsoluteSize.X)
+    local maxX = math.max(ax, ax + lassoFrame.AbsoluteSize.X)
+    local minY = math.min(ay, ay + lassoFrame.AbsoluteSize.Y)
+    local maxY = math.max(ay, ay + lassoFrame.AbsoluteSize.Y)
+
+    local pm = getPlayerModels()
+    if pm then
+        for _, obj in ipairs(pm:GetChildren()) do
+            if not obj:IsA("Model") then continue end
+            -- Use PrimaryPart → "Main" → first BasePart as the representative point
+            local rep = obj.PrimaryPart
+                     or obj:FindFirstChild("Main")
+                     or obj:FindFirstChildWhichIsA("BasePart")
+            if not rep then continue end
+            local sp, onScreen = camera:WorldToScreenPoint(rep.Position)
+            if onScreen and sp.X >= minX and sp.X <= maxX
+                        and sp.Y >= minY and sp.Y <= maxY then
+                highlightModel(obj)
+            end
+        end
+    end
+
+    lassoFrame.Size    = UDim2.new(0, 0, 0, 0)
+    lassoFrame.Visible = false
+    lassoActive        = false
+end
+
+local function StartLasso(originX, originY)
+    if lassoActive then return end
+    lassoActive   = true
+    lassoOriginX  = originX
+    lassoOriginY  = originY
+    lassoFrame.Position = UDim2.new(0, originX, 0, originY)
+    lassoFrame.Size     = UDim2.new(0, 0, 0, 0)
+    lassoFrame.Visible  = true
+
+    -- Only update the visual rect each frame — no world scanning here
+    lassoRenderConn = RunService.RenderStepped:Connect(function()
+        if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+            lassoRenderConn:Disconnect()
+            lassoRenderConn = nil
+            FinaliseLasso()
+            return
+        end
+        local x = math.min(lassoOriginX, mouse.X)
+        local y = math.min(lassoOriginY, mouse.Y)
+        local w = math.abs(mouse.X - lassoOriginX)
+        local h = math.abs(mouse.Y - lassoOriginY)
+        lassoFrame.Position = UDim2.new(0, x, 0, y)
+        lassoFrame.Size     = UDim2.new(0, w, 0, h)
+    end)
+end
+
+-- ── Ctrl+A: select everything in PlayerModels ──────────────────────────────
+local function SelectAllItems()
+    local pm = getPlayerModels()
+    if not pm then return end
+    for _, obj in ipairs(pm:GetChildren()) do
+        if obj:IsA("Model") then highlightModel(obj) end
+    end
+end
+
+-- ── Mode flags ─────────────────────────────────────────────────────────────
+local clickSelectionEnabled = false
+local lassoEnabled          = false
+local groupSelectionEnabled = false
+
+-- ── Input wiring ───────────────────────────────────────────────────────────
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.KeyCode == Enum.KeyCode.Escape then
+        ClearAllSelection(); return
+    end
+    if input.KeyCode == Enum.KeyCode.A
+    and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+        SelectAllItems(); return
+    end
+
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    if not (clickSelectionEnabled or lassoEnabled or groupSelectionEnabled) then return end
+
+    local startX, startY = mouse.X, mouse.Y
+
+    if groupSelectionEnabled then
+        HandleGroupSelection()
+    elseif lassoEnabled then
+        task.spawn(function()
+            local t0 = tick()
+            while tick() - t0 < 0.15
+            and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                RunService.RenderStepped:Wait()
+                if math.abs(mouse.X - startX) >= 5
+                or math.abs(mouse.Y - startY) >= 5 then
+                    StartLasso(startX, startY)
+                    return
+                end
+            end
+            HandleClickSelection()   -- tap with no drag = click
+        end)
+    elseif clickSelectionEnabled then
+        HandleClickSelection()
+    end
+end)
+
+table.insert(cleanupTasks, function()
+    ClearAllSelection()
+    if lassoRenderConn then lassoRenderConn:Disconnect(); lassoRenderConn = nil end
+    lassoFrame.Visible = false
+    lassoActive = false
+end)
+
+-- ════════════════════════════════════════════════════
+-- ITEM TAB UI
+-- ════════════════════════════════════════════════════
 local isItemTeleporting = false
-local tpProgressContainer = nil
-local tpProgressFill = nil
-local tpProgressLabel = nil
+local tpCircle = nil
+local tpProgressContainer, tpProgressFill, tpProgressLabel = nil, nil, nil
 
 local function createSectionLabel(text)
     local lbl = Instance.new("TextLabel", itemPage)
@@ -729,7 +1066,7 @@ local function createSectionLabel(text)
     lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11
     lbl.TextColor3 = Color3.fromRGB(120,120,150); lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Text = string.upper(text)
-    local pad = Instance.new("UIPadding", lbl); pad.PaddingLeft = UDim.new(0, 4)
+    Instance.new("UIPadding", lbl).PaddingLeft = UDim.new(0, 4)
 end
 
 local function createSep()
@@ -778,104 +1115,79 @@ local function createItemToggle(text, defaultState, callback)
         }):Play()
         if callback then callback(toggled) end
     end)
-    return frame
+    local function setToggled(val)
+        if toggled == val then return end
+        toggled = val
+        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = toggled and Color3.fromRGB(60,180,60) or BTN_COLOR
+        }):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
+        }):Play()
+        -- Note: callback is NOT called from setToggled to avoid infinite mutual-exclusion loops
+    end
+    return frame, setToggled
 end
 
 createSectionLabel("Selection Mode")
-createItemToggle("Click Selection", false, function(val) clickSelection = val; if val then lassoTool = false end end)
-createItemToggle("Lasso Tool", false, function(val) lassoTool = val; if val then clickSelection = false end end)
-createItemToggle("Group Selection", false, function(val) groupSelection = val end)
+
+local clickSelToggleSetFn = nil
+local lassoToggleSetFn    = nil
+
+local _, clickSelSet = createItemToggle("Click Selection", false, function(val)
+    clickSelectionEnabled = val
+    if val then
+        lassoEnabled = false
+        if lassoToggleSetFn then lassoToggleSetFn(false) end
+    end
+end)
+clickSelToggleSetFn = clickSelSet
+
+local _, lassoSet = createItemToggle("Lasso Tool", false, function(val)
+    lassoEnabled = val
+    if val then
+        clickSelectionEnabled = false
+        if clickSelToggleSetFn then clickSelToggleSetFn(false) end
+    end
+end)
+lassoToggleSetFn = lassoSet
+
+createItemToggle("Group Selection", false, function(val)
+    groupSelectionEnabled = val
+end)
+
 createSep()
+createSectionLabel("Teleport Mode")
 
--- ════════════════════════════════════════════════════
--- SELECTION HELPERS  (copied verbatim from working file)
--- ════════════════════════════════════════════════════
-local function getOwner(model)
-    local ov = model:FindFirstChild("Owner")
-    if ov then
-        if ov:IsA("ObjectValue") then return ov.Value
-        elseif ov:IsA("StringValue") then return ov.Value end
+-- Teleport mode: "group" teleports all items of one group before moving to the next.
+-- "random" ignores groups and teleports in a completely random order.
+-- Default is group teleport (matches the original sequential behaviour per model).
+local tpModeGroup  = true   -- Group Teleport on by default
+local tpModeRandom = false  -- Random Teleport off by default
+
+-- Mutual-exclusion helper for the two mode toggles
+local groupTpToggleSetFn  = nil
+local randomTpToggleSetFn = nil
+
+local groupTpFrame, groupTpSet = createItemToggle("Group Teleport", true, function(val)
+    tpModeGroup = val
+    if val then
+        tpModeRandom = false
+        if randomTpToggleSetFn then randomTpToggleSetFn(false) end
     end
-    return nil
-end
+end)
+groupTpToggleSetFn = function(v) tpModeGroup = v; groupTpSet(v) end
 
-local function getItemCategory(model)
-    local iv = model:FindFirstChild("ItemName")
-    if iv and iv:IsA("StringValue") then return iv.Value end
-    return model.Name
-end
-
-local function isMoveableItem(model)
-    local mp = model.PrimaryPart or model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
-    if not mp then return false end
-    if model == workspace then return false end
-    local staticNames = {
-        Map=true,Terrain=true,Camera=true,Baseplate=true,Base=true,Ground=true,
-        Land=true,Island=true,Water=true,Tree=true,Palm=true,Bush=true,Rock=true,
-        Stump=true,Branch=true,Log=true,PalmTree=true,CypressTree=true,SpruceTree=true,
-        ElmTree=true,ChestnutTree=true,CherryTree=true,OakTree=true,BirchTree=true,
-        Fence=true,Road=true,Path=true,River=true,Cliff=true,Hill=true,Bridge=true,
-    }
-    if staticNames[model.Name] then return false end
-    local hasOwner = model:FindFirstChild("Owner") ~= nil
-    if not hasOwner then
-        local hasItemName = model:FindFirstChild("ItemName") ~= nil
-        if not hasItemName then return false end
+local randomTpFrame, randomTpSet = createItemToggle("Random Teleport", false, function(val)
+    tpModeRandom = val
+    if val then
+        tpModeGroup = false
+        if groupTpToggleSetFn then groupTpToggleSetFn(false) end
     end
-    return true
-end
+end)
+randomTpToggleSetFn = function(v) tpModeRandom = v; randomTpSet(v) end
 
-local function highlightModel(model)
-    if selectedItems[model] then return end
-    local hl = Instance.new("SelectionBox")
-    hl.Color3 = Color3.fromRGB(0,170,255); hl.LineThickness = 0.05
-    hl.Adornee = model; hl.Parent = model
-    selectedItems[model] = hl
-end
-
-local function unhighlightModel(model)
-    if selectedItems[model] then selectedItems[model]:Destroy(); selectedItems[model] = nil end
-end
-
-local function unhighlightAll()
-    for model, hl in pairs(selectedItems) do
-        if hl and hl.Parent then hl:Destroy() end
-    end
-    selectedItems = {}
-end
-
-local function handleSelection(target, forceSelect)
-    if not target then return end
-    local model = target:FindFirstAncestorOfClass("Model")
-    if not (model and isMoveableItem(model)) then return end
-    if groupSelection then
-        local ownerVal = getOwner(model)
-        local cat = getItemCategory(model)
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and isMoveableItem(obj) then
-                local objCat = getItemCategory(obj)
-                if objCat == cat then
-                    local objOwner = getOwner(obj)
-                    local ownerMatch = true
-                    if ownerVal ~= nil and objOwner ~= nil then
-                        ownerMatch = tostring(ownerVal) == tostring(objOwner)
-                    end
-                    if ownerMatch then highlightModel(obj) end
-                end
-            end
-        end
-    else
-        if forceSelect then
-            highlightModel(model)
-        else
-            if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
-        end
-    end
-end
-
--- ════════════════════════════════════════════════════
--- ITEM TELEPORT DESTINATION
--- ════════════════════════════════════════════════════
+createSep()
 createSectionLabel("Item Teleport Destination")
 
 local tpRow = Instance.new("Frame", itemPage)
@@ -920,7 +1232,7 @@ end)
 
 table.insert(cleanupTasks, function()
     if tpCircle and tpCircle.Parent then tpCircle:Destroy(); tpCircle = nil end
-    unhighlightAll()
+    ClearAllSelection()
 end)
 
 createSep()
@@ -932,39 +1244,71 @@ createItemButton("Teleport Selected Items", function()
     isItemTeleporting = true
 
     task.spawn(function()
+        -- Build the ordered queue based on current teleport mode
+        -- Each entry is a Model (not a sub-part)
         local queue = {}
-        for model in pairs(selectedItems) do
-            if model and model.Parent then table.insert(queue, model) end
+
+        if tpModeRandom then
+            -- Completely random order
+            local models = GetSelectedParts()   -- returns models
+            for i = #models, 2, -1 do
+                local j = math.random(1, i)
+                models[i], models[j] = models[j], models[i]
+            end
+            queue = models
+        else
+            -- Group Teleport: finish all models in one category-owner group first
+            local groups = GetSelectionGroups()   -- {key → {models}}
+            local groupKeys = {}
+            for k in pairs(groups) do table.insert(groupKeys, k) end
+            for i = #groupKeys, 2, -1 do
+                local j = math.random(1, i)
+                groupKeys[i], groupKeys[j] = groupKeys[j], groupKeys[i]
+            end
+            for _, k in ipairs(groupKeys) do
+                for _, model in ipairs(groups[k]) do
+                    table.insert(queue, model)
+                end
+            end
         end
+
         local total = #queue
-        local done = 0
+        local done  = 0
+
         if tpProgressContainer then
             tpProgressContainer.Visible = true
-            tpProgressFill.Size = UDim2.new(0, 0, 1, 0)
+            tpProgressFill.Size  = UDim2.new(0, 0, 1, 0)
             tpProgressLabel.Text = "Teleporting... 0 / " .. total
         end
+
         for _, model in ipairs(queue) do
             if not isItemTeleporting then break end
             if not (model and model.Parent) then done = done + 1; continue end
-            local mainPart = model.PrimaryPart or model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
-            if not mainPart then done = done + 1; continue end
+
+            -- Find the representative part for CFrame operations
+            local part = model.PrimaryPart
+                         or model:FindFirstChild("Main")
+                         or model:FindFirstChildWhichIsA("BasePart")
+            if not part then done = done + 1; continue end
+
             local char = player.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
             if not hrp then done = done + 1; continue end
-            hrp.CFrame = mainPart.CFrame * CFrame.new(0, 4, 2)
+
+            hrp.CFrame = part.CFrame * CFrame.new(0, 4, 2)
             task.wait(0.12)
             local dragger = game.ReplicatedStorage:FindFirstChild("Interaction")
                 and game.ReplicatedStorage.Interaction:FindFirstChild("ClientIsDragging")
             if dragger then dragger:FireServer(model) end
             task.wait(0.08)
-            if mainPart and mainPart.Parent then mainPart.CFrame = tpCircle.CFrame end
+            if part and part.Parent then part.CFrame = tpCircle.CFrame end
             task.wait(0.08)
             if dragger then dragger:FireServer(model) end
             task.wait(0.22)
-            local hl = selectedItems[model]
-            if hl and hl.Parent then hl:Destroy() end
-            selectedItems[model] = nil
+
+            DeselectPart(model)
             done = done + 1
+
             if tpProgressContainer and tpProgressContainer.Visible then
                 local pct = done / math.max(total, 1)
                 TweenService:Create(tpProgressFill, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
@@ -973,15 +1317,17 @@ createItemButton("Teleport Selected Items", function()
                 tpProgressLabel.Text = "Teleporting... " .. done .. " / " .. total
             end
         end
+
         isItemTeleporting = false
+
         if tpProgressContainer and tpProgressContainer.Visible then
             TweenService:Create(tpProgressFill, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 1, 0)}):Play()
             tpProgressLabel.Text = "Done! " .. done .. " / " .. total .. " teleported"
             task.delay(1.8, function()
                 if tpProgressContainer then
                     TweenService:Create(tpProgressContainer, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-                    TweenService:Create(tpProgressFill, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-                    TweenService:Create(tpProgressLabel, TweenInfo.new(0.4), {TextTransparency = 1}):Play()
+                    TweenService:Create(tpProgressFill,      TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+                    TweenService:Create(tpProgressLabel,     TweenInfo.new(0.4), {TextTransparency = 1}):Play()
                     task.delay(0.45, function()
                         if tpProgressContainer then
                             tpProgressContainer.Visible = false
@@ -997,7 +1343,7 @@ createItemButton("Teleport Selected Items", function()
 end)
 
 createItemButton("Cancel Teleport", function() isItemTeleporting = false end)
-createItemButton("Clear Selection", function() unhighlightAll() end)
+createItemButton("Clear Selection",  function() ClearAllSelection() end)
 
 do
     local pbWrapper = Instance.new("Frame", itemPage)
@@ -1028,83 +1374,9 @@ do
     pbFill.BorderSizePixel = 0
     Instance.new("UICorner", pbFill).CornerRadius = UDim.new(1,0)
     tpProgressContainer = pbWrapper
-    tpProgressFill = pbFill
-    tpProgressLabel = pbLabel
+    tpProgressFill      = pbFill
+    tpProgressLabel     = pbLabel
 end
-
--- ════════════════════════════════════════════════════
--- LASSO  (copied verbatim from working file)
--- ════════════════════════════════════════════════════
-local lassoFrame = Instance.new("Frame", gui)
-lassoFrame.Name = "LassoRect"
-lassoFrame.BackgroundColor3 = Color3.fromRGB(60,120,200)
-lassoFrame.BackgroundTransparency = 0.82
-lassoFrame.BorderSizePixel = 0
-lassoFrame.Visible = false; lassoFrame.ZIndex = 20
-local lassoStroke = Instance.new("UIStroke", lassoFrame)
-lassoStroke.Color = Color3.fromRGB(100,160,255); lassoStroke.Thickness = 1.5; lassoStroke.Transparency = 0
-
-local lassoStartPos = nil
-
-local function updateLassoFrame(s, c)
-    local minX = math.min(s.X, c.X); local minY = math.min(s.Y, c.Y)
-    lassoFrame.Position = UDim2.new(0, minX, 0, minY)
-    lassoFrame.Size = UDim2.new(0, math.abs(c.X-s.X), 0, math.abs(c.Y-s.Y))
-end
-
-local camera = workspace.CurrentCamera
-local function selectItemsInLasso()
-    if not lassoStartPos then return end
-    local cur = Vector2.new(player:GetMouse().X, player:GetMouse().Y)
-    local minX = math.min(lassoStartPos.X, cur.X); local maxX = math.max(lassoStartPos.X, cur.X)
-    local minY = math.min(lassoStartPos.Y, cur.Y); local maxY = math.max(lassoStartPos.Y, cur.Y)
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and isMoveableItem(obj) then
-            local mp = obj.PrimaryPart or obj:FindFirstChild("Main") or obj:FindFirstChildWhichIsA("BasePart")
-            if mp then
-                local sp, onScreen = camera:WorldToScreenPoint(mp.Position)
-                if onScreen and sp.X >= minX and sp.X <= maxX and sp.Y >= minY and sp.Y <= maxY then
-                    highlightModel(obj)
-                end
-            end
-        end
-    end
-end
-
-local mouse = player:GetMouse()
-local mouseIsDragging = false
-
-mouse.Button1Down:Connect(function()
-    mouseIsDragging = true
-    if lassoTool then
-        lassoStartPos = Vector2.new(mouse.X, mouse.Y)
-        lassoFrame.Size = UDim2.new(0,0,0,0)
-        lassoFrame.Visible = true
-    elseif clickSelection or groupSelection then
-        handleSelection(mouse.Target, false)
-    end
-end)
-
-mouse.Button1Up:Connect(function()
-    mouseIsDragging = false
-    if lassoTool then
-        selectItemsInLasso()
-        lassoFrame.Visible = false
-        lassoStartPos = nil
-    end
-end)
-
-mouse.Move:Connect(function()
-    if mouseIsDragging and lassoTool and lassoStartPos then
-        updateLassoFrame(lassoStartPos, Vector2.new(mouse.X, mouse.Y))
-    end
-end)
-
-table.insert(cleanupTasks, function()
-    unhighlightAll()
-    lassoFrame.Visible = false
-    lassoStartPos = nil
-end)
 
 -- ════════════════════════════════════════════════════
 -- PLAYER TAB
@@ -1252,6 +1524,7 @@ end)
 local flySpeed = 100
 createPSlider("Fly Speed", 100, 500, 100, function(val) flySpeed = val end)
 
+-- Fly key button
 local flyKeyFrame = Instance.new("Frame", playerPage)
 flyKeyFrame.Size = UDim2.new(1,-12,0,32); flyKeyFrame.BackgroundColor3 = Color3.fromRGB(24,24,30)
 Instance.new("UICorner", flyKeyFrame).CornerRadius = UDim.new(0,6)
@@ -1261,7 +1534,6 @@ flyKeyLabel.BackgroundTransparency = 1; flyKeyLabel.Font = Enum.Font.GothamSemib
 flyKeyLabel.TextColor3 = THEME_TEXT; flyKeyLabel.TextXAlignment = Enum.TextXAlignment.Left
 flyKeyLabel.Text = "Fly Key"
 local currentFlyKey = Enum.KeyCode.Q
-local waitingForFlyKey = false
 local flyKeyBtn = Instance.new("TextButton", flyKeyFrame)
 flyKeyBtn.Size = UDim2.new(0,60,0,22); flyKeyBtn.Position = UDim2.new(1,-68,0.5,-11)
 flyKeyBtn.BackgroundColor3 = BTN_COLOR; flyKeyBtn.Font = Enum.Font.GothamSemibold
@@ -1276,8 +1548,21 @@ flyKeyBtn.MouseButton1Click:Connect(function()
     flyKeyBtn.BackgroundColor3 = Color3.fromRGB(60,100,60)
 end)
 
-local isFlyEnabled = false
-local flyToggleEnabled = true
+local flyHint = Instance.new("TextLabel", playerPage)
+flyHint.Size = UDim2.new(1,-12,0,22)
+flyHint.BackgroundColor3 = Color3.fromRGB(18,18,24)
+flyHint.BorderSizePixel = 0
+flyHint.Font = Enum.Font.Gotham; flyHint.TextSize = 11
+flyHint.TextColor3 = Color3.fromRGB(100,100,130)
+flyHint.TextWrapped = true; flyHint.TextXAlignment = Enum.TextXAlignment.Left
+flyHint.Text = "  Press your Fly Key (Q) to toggle fly on/off"
+Instance.new("UICorner", flyHint).CornerRadius = UDim.new(0,6)
+Instance.new("UIPadding", flyHint).PaddingLeft = UDim.new(0,6)
+
+local isFlyEnabled     = false
+-- flyToggleEnabled: when FALSE the fly hotkey does nothing at all.
+-- Starts as FALSE (hotkey disabled by default — user must turn it on).
+local flyToggleEnabled = false
 local flyBV, flyBG, flyConn
 
 local function stopFly()
@@ -1299,7 +1584,7 @@ local function startFly()
     local char = player.Character
     if not char then isFlyEnabled = false; return end
     local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChild("Humanoid")
+    local hum  = char:FindFirstChild("Humanoid")
     if not root or not hum then isFlyEnabled = false; return end
     hum.PlatformStand = true
     flyBV = Instance.new("BodyVelocity", root)
@@ -1310,44 +1595,36 @@ local function startFly()
     flyBG.P = 1e4; flyBG.D = 100
     flyConn = RunService.Heartbeat:Connect(function()
         if not (flyBV and flyBV.Parent and flyBG and flyBG.Parent) then return end
-        local char = player.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not (hum and root) then return end
+        local c2  = player.Character
+        local h2  = c2 and c2:FindFirstChild("Humanoid")
+        local r2  = c2 and c2:FindFirstChild("HumanoidRootPart")
+        if not (h2 and r2) then return end
         local cam = workspace.CurrentCamera
-        local cf = cam.CFrame
+        local cf  = cam.CFrame
         local UIS = UserInputService
         local dir = Vector3.zero
-        if UIS:IsKeyDown(Enum.KeyCode.W) then dir = dir + cf.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then dir = dir - cf.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then dir = dir - cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then dir = dir + cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.W)         then dir = dir + cf.LookVector  end
+        if UIS:IsKeyDown(Enum.KeyCode.S)         then dir = dir - cf.LookVector  end
+        if UIS:IsKeyDown(Enum.KeyCode.A)         then dir = dir - cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D)         then dir = dir + cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space)     then dir = dir + Vector3.new(0,1,0) end
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0,1,0) end
-        hum.PlatformStand = true
-        flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        h2.PlatformStand = true
+        flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
         flyBV.Velocity = dir.Magnitude > 0 and dir.Unit * flySpeed or Vector3.zero
-        flyBG.CFrame = cf
+        flyBG.CFrame   = cf
     end)
 end
 
 table.insert(cleanupTasks, stopFly)
 
-local _, setFlyToggle = createPToggle("Fly", true, function(val)
+-- ── Fly toggle — sits directly under the Fly Key row ──────────────────────
+-- Label is simply "Fly". Default ON = hotkey enabled (toggle starts enabled).
+-- When turned off the hotkey is silenced; if mid-flight, landing happens immediately.
+createPToggle("Fly", true, function(val)
     flyToggleEnabled = val
-    if val then
-        local char = Players.LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            startFly()
-        else
-            Players.LocalPlayer.CharacterAdded:Wait()
-            task.wait(0.1)
-            startFly()
-        end
-    else
-        stopFly()
-    end
+    if _G.VH then _G.VH.flyToggleEnabled = flyToggleEnabled end
+    if not val and isFlyEnabled then stopFly() end
 end)
 
 createPSep()
@@ -1424,7 +1701,7 @@ _G.VH = {
     stopFly          = stopFly,
     startFly         = startFly,
     butter           = { running = false, thread = nil },
-    flyToggleEnabled = true,
+    flyToggleEnabled = flyToggleEnabled,  -- false by default; toggled by "Fly" switch
     isFlyEnabled     = false,
     currentFlyKey    = Enum.KeyCode.Q,
     waitingForFlyKey = false,
@@ -1432,8 +1709,16 @@ _G.VH = {
     currentToggleKey = currentToggleKey,
     waitingForKeyGUI = waitingForKeyGUI,
     keybindButtonGUI = nil,
+    -- Selection API for Vanilla2 / Vanilla3
+    Selection = {
+        GetParts  = GetSelectedParts,
+        GetGroups = GetSelectionGroups,
+        Clear     = ClearAllSelection,
+        Select    = SelectPart,
+        Deselect  = DeselectPart,
+    },
 }
 
 _G.VanillaHubCleanup = onExit
 
-print("[VanillaHub | Lt2] Vanilla1 loaded")
+print("[VanillaHub] Vanilla1 loaded")
