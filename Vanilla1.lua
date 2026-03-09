@@ -13,7 +13,6 @@ end
 
 -- Nuke leftover _G.VH table completely
 if _G.VH then
-    -- Cancel any running dupe thread
     if _G.VH.butter and _G.VH.butter.running then
         _G.VH.butter.running = false
         if _G.VH.butter.thread then pcall(task.cancel, _G.VH.butter.thread) end
@@ -105,7 +104,6 @@ local TeleportService  = game:GetService("TeleportService")
 local Stats            = game:GetService("Stats")
 local player           = Players.LocalPlayer
 
--- Shared theme color
 local THEME_TEXT = Color3.fromRGB(230, 206, 226)
 
 -- ════════════════════════════════════════════════════
@@ -127,9 +125,7 @@ local function onExit()
         end
     end
 
-    for _, fn in ipairs(cleanupTasks) do
-        pcall(fn)
-    end
+    for _, fn in ipairs(cleanupTasks) do pcall(fn) end
     cleanupTasks = {}
 
     pcall(function()
@@ -184,7 +180,7 @@ end)
 
 _G.VanillaHubCleanup = onExit
 
--- ── OUTER WRAPPER: holds UICorner, no ClipsDescendants, no stroke/outline
+-- OUTER WRAPPER
 local wrapper = Instance.new("Frame", gui)
 wrapper.Size = UDim2.new(0, 0, 0, 0)
 wrapper.Position = UDim2.new(0.5, -260, 0.5, -170)
@@ -194,7 +190,7 @@ wrapper.BorderSizePixel = 0
 wrapper.ClipsDescendants = false
 Instance.new("UICorner", wrapper).CornerRadius = UDim.new(0, 12)
 
--- ── MAIN: inner frame that clips content, parented to wrapper
+-- MAIN (clips content)
 local main = Instance.new("Frame", wrapper)
 main.Size = UDim2.new(1, 0, 1, 0)
 main.Position = UDim2.new(0, 0, 0, 0)
@@ -204,7 +200,6 @@ main.BorderSizePixel = 0
 main.ClipsDescendants = true
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
--- Animate the wrapper (not main) for open/close
 TweenService:Create(wrapper, TweenInfo.new(0.65, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
     Size = UDim2.new(0, 520, 0, 340),
     BackgroundTransparency = 0
@@ -490,7 +485,6 @@ for _, name in ipairs(tabs) do
     local pad = Instance.new("UIPadding", btn)
     pad.PaddingLeft = UDim.new(0, 16)
 
-    -- Ripple effect container
     local rippleContainer = Instance.new("Frame", btn)
     rippleContainer.Size = UDim2.new(1, 0, 1, 0)
     rippleContainer.BackgroundTransparency = 1
@@ -516,7 +510,6 @@ for _, name in ipairs(tabs) do
         end
     end)
 
-    -- Click ripple effect
     btn.MouseButton1Click:Connect(function()
         task.spawn(function()
             local ripple = Instance.new("Frame", rippleContainer)
@@ -526,7 +519,6 @@ for _, name in ipairs(tabs) do
             ripple.BackgroundTransparency = 0.75
             ripple.BorderSizePixel = 0
             Instance.new("UICorner", ripple).CornerRadius = UDim.new(1, 0)
-
             TweenService:Create(ripple, TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                 Size = UDim2.new(0, 140, 0, 140),
                 Position = UDim2.new(0.5, -70, 0.5, -70),
@@ -577,7 +569,6 @@ end
 -- ════════════════════════════════════════════════════
 local homePage = pages["HomeTab"]
 
--- ── CHAT BUBBLE WELCOME CARD ──────────────────────────────────────────────────
 local bubbleRow = Instance.new("Frame", homePage)
 bubbleRow.Size = UDim2.new(1, 0, 0, 100)
 bubbleRow.BackgroundTransparency = 1
@@ -628,8 +619,8 @@ bubbleStroke.Transparency = 0.55
 
 local bubbleGrad = Instance.new("UIGradient", bubbleBody)
 bubbleGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0,  Color3.fromRGB(52, 30, 54)),
-    ColorSequenceKeypoint.new(1,  Color3.fromRGB(28, 16, 30)),
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(52, 30, 54)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 16, 30)),
 })
 bubbleGrad.Rotation = 135
 
@@ -657,7 +648,7 @@ bubbleMsg.TextWrapped        = true
 bubbleMsg.Text               = "Welcome back to VanillaHub!\nEnjoy your time here ✨"
 bubbleMsg.ZIndex             = 3
 
--- ── STATS GRID ────────────────────────────────────────────────────────────────
+-- STATS GRID
 local statsContainer = Instance.new("Frame", homePage)
 statsContainer.Size = UDim2.new(1, 0, 0, 160)
 statsContainer.BackgroundTransparency = 1
@@ -691,12 +682,14 @@ rejoinBtn.Font = Enum.Font.Gotham; rejoinBtn.TextSize = 14
 rejoinBtn.TextColor3 = THEME_TEXT; rejoinBtn.Text = "Rejoin"
 Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0, 8)
 rejoinBtn.MouseEnter:Connect(function()
-    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(35,35,45), TextColor3 = THEME_TEXT}):Play()
+    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(35,35,45)}):Play()
 end)
 rejoinBtn.MouseLeave:Connect(function()
-    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(22,22,28), TextColor3 = THEME_TEXT}):Play()
+    TweenService:Create(rejoinBtn, TweenInfo.new(0.18), {BackgroundColor3 = Color3.fromRGB(22,22,28)}):Play()
 end)
-rejoinBtn.MouseButton1Click:Connect(function() pcall(function() TeleportService:Teleport(game.PlaceId, player) end) end)
+rejoinBtn.MouseButton1Click:Connect(function()
+    pcall(function() TeleportService:Teleport(game.PlaceId, player) end)
+end)
 
 local pingConn = RunService.Heartbeat:Connect(function()
     local ok, ping = pcall(function() return math.round(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
@@ -740,8 +733,12 @@ for _, loc in ipairs(locations) do
     btn.BorderSizePixel = 0; btn.Font = Enum.Font.GothamSemibold; btn.TextSize = 13
     btn.TextColor3 = THEME_TEXT; btn.Text = loc.name
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(38,38,50), TextColor3 = Color3.fromRGB(255,255,255)}):Play() end)
-    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(20,20,26), TextColor3 = THEME_TEXT}):Play() end)
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(38,38,50), TextColor3 = Color3.fromRGB(255,255,255)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(20,20,26), TextColor3 = THEME_TEXT}):Play()
+    end)
     btn.MouseButton1Click:Connect(function()
         local char = player.Character
         if char and char:FindFirstChild("HumanoidRootPart") then
@@ -760,15 +757,15 @@ if itemList then itemList.Padding = UDim.new(0, 6) end
 local BTN_COLOR = Color3.fromRGB(45, 45, 50)
 local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 
-local clickSelection = false
-local lassoTool = false
-local groupSelection = false
-local selectedItems = {}
-local tpCircle = nil
+local clickSelection    = false
+local lassoTool         = false
+local groupSelection    = false
+local selectedItems     = {}
+local tpCircle          = nil
 local isItemTeleporting = false
 local tpProgressContainer = nil
-local tpProgressFill = nil
-local tpProgressLabel = nil
+local tpProgressFill    = nil
+local tpProgressLabel   = nil
 
 local function createSectionLabel(text)
     local lbl = Instance.new("TextLabel", itemPage)
@@ -830,9 +827,83 @@ end
 
 createSectionLabel("Selection Mode")
 createItemToggle("Click Selection", false, function(val) clickSelection = val; if val then lassoTool = false end end)
-createItemToggle("Lasso Tool", false, function(val) lassoTool = val; if val then clickSelection = false end end)
+createItemToggle("Lasso Tool",      false, function(val) lassoTool = val;      if val then clickSelection = false end end)
 createItemToggle("Group Selection", false, function(val) groupSelection = val end)
 createSep()
+
+-- ════════════════════════════════════════════════════
+-- ITEM FILTERING
+-- Only allows selection of player-owned Logs/Wood and Gifts.
+-- Vehicles, land, trees, structures, and furniture are all blocked.
+-- ════════════════════════════════════════════════════
+
+-- Every known LT2 log/wood ItemName value
+local ALLOWED_WOOD = {
+    ["Logs"]          = true,
+    ["Log"]           = true,
+    ["CherryLogs"]    = true,
+    ["OakLogs"]       = true,
+    ["BirchLogs"]     = true,
+    ["ElmLogs"]       = true,
+    ["ChestnutLogs"]  = true,
+    ["SpuceLogs"]     = true,
+    ["SpuceBLogs"]    = true,
+    ["PineLogs"]      = true,
+    ["WalnutLogs"]    = true,
+    ["BambooLogs"]    = true,
+    ["GoldLogs"]      = true,
+    ["FrostwoodLogs"] = true,
+    ["LavaLogs"]      = true,
+    ["VolcanoLogs"]   = true,
+    ["CaveLogs"]      = true,
+    ["KoaLogs"]       = true,
+    ["SinisterLogs"]  = true,
+    ["AmbientLogs"]   = true,
+    ["SnowGlowLogs"]  = true,
+    ["EndTimesLogs"]  = true,
+    ["NeonLogs"]      = true,
+    ["PhantomLogs"]   = true,
+}
+
+-- Returns true only for logs/wood or gift models
+local function isAllowedModelType(model)
+    local iv = model:FindFirstChild("ItemName")
+    if iv and iv:IsA("StringValue") then
+        local itemName = iv.Value
+        -- Exact match on known wood types
+        if ALLOWED_WOOD[itemName] then return true end
+        -- Catch any unlisted log variant
+        if itemName:lower():find("log") then return true end
+        -- Allow gifts
+        if itemName:lower():find("gift") then return true end
+        -- Everything else (vehicles, furniture, structures, land, trees) is rejected
+        return false
+    end
+    -- No ItemName at all — only allow if the model name itself looks like a log
+    if model.Name:lower():find("log") then return true end
+    return false
+end
+
+-- Returns true only when this exact player owns the model
+local function isOwnedByPlayer(model)
+    local ov = model:FindFirstChild("Owner")
+    if not ov then return false end
+    if ov:IsA("ObjectValue") then
+        return ov.Value == player
+    elseif ov:IsA("StringValue") then
+        return ov.Value == player.Name or ov.Value == tostring(player.UserId)
+    end
+    return false
+end
+
+local function isMoveableItem(model)
+    if model == workspace then return false end
+    local mp = model.PrimaryPart or model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
+    if not mp then return false end
+    if not isAllowedModelType(model) then return false end
+    if not isOwnedByPlayer(model) then return false end
+    return true
+end
 
 local function getOwner(model)
     local ov = model:FindFirstChild("Owner")
@@ -849,25 +920,7 @@ local function getItemCategory(model)
     return model.Name
 end
 
-local function isMoveableItem(model)
-    local mp = model.PrimaryPart or model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
-    if not mp then return false end
-    if model == workspace then return false end
-    local staticNames = {
-        Map=true,Terrain=true,Camera=true,Baseplate=true,Base=true,Ground=true,
-        Land=true,Island=true,Water=true,Tree=true,Palm=true,Bush=true,Rock=true,
-        Stump=true,Branch=true,Log=true,PalmTree=true,CypressTree=true,SpruceTree=true,
-        ElmTree=true,ChestnutTree=true,CherryTree=true,OakTree=true,BirchTree=true,
-        Fence=true,Road=true,Path=true,River=true,Cliff=true,Hill=true,Bridge=true,
-    }
-    if staticNames[model.Name] then return false end
-    local hasOwner = model:FindFirstChild("Owner") ~= nil
-    if not hasOwner then
-        local hasItemName = model:FindFirstChild("ItemName") ~= nil
-        if not hasItemName then return false end
-    end
-    return true
-end
+-- ════════════════════════════════════════════════════
 
 local function highlightModel(model)
     if selectedItems[model] then return end
@@ -971,14 +1024,13 @@ createItemButton("Teleport Selected Items", function()
     if not tpCircle then return end
     if isItemTeleporting then return end
     isItemTeleporting = true
-
     task.spawn(function()
         local queue = {}
         for model in pairs(selectedItems) do
             if model and model.Parent then table.insert(queue, model) end
         end
         local total = #queue
-        local done = 0
+        local done  = 0
         if tpProgressContainer then
             tpProgressContainer.Visible = true
             tpProgressFill.Size = UDim2.new(0, 0, 1, 0)
@@ -990,7 +1042,7 @@ createItemButton("Teleport Selected Items", function()
             local mainPart = model.PrimaryPart or model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
             if not mainPart then done = done + 1; continue end
             local char = player.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
             if not hrp then done = done + 1; continue end
             hrp.CFrame = mainPart.CFrame * CFrame.new(0, 4, 2)
             task.wait(0.12)
@@ -1021,8 +1073,8 @@ createItemButton("Teleport Selected Items", function()
             task.delay(1.8, function()
                 if tpProgressContainer then
                     TweenService:Create(tpProgressContainer, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-                    TweenService:Create(tpProgressFill, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-                    TweenService:Create(tpProgressLabel, TweenInfo.new(0.4), {TextTransparency = 1}):Play()
+                    TweenService:Create(tpProgressFill,      TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+                    TweenService:Create(tpProgressLabel,     TweenInfo.new(0.4), {TextTransparency = 1}):Play()
                     task.delay(0.45, function()
                         if tpProgressContainer then
                             tpProgressContainer.Visible = false
@@ -1038,13 +1090,13 @@ createItemButton("Teleport Selected Items", function()
 end)
 
 createItemButton("Cancel Teleport", function() isItemTeleporting = false end)
-createItemButton("Clear Selection", function() unhighlightAll() end)
+createItemButton("Clear Selection",  function() unhighlightAll() end)
 
 do
     local pbWrapper = Instance.new("Frame", itemPage)
     pbWrapper.Size = UDim2.new(1,-12,0,44)
     pbWrapper.BackgroundColor3 = Color3.fromRGB(18,18,24)
-    pbWrapper.BorderSizePixel = 0
+    pbWrapper.BorderSizePixel  = 0
     pbWrapper.Visible = false
     Instance.new("UICorner", pbWrapper).CornerRadius = UDim.new(0, 8)
     local pbStroke = Instance.new("UIStroke", pbWrapper)
@@ -1054,25 +1106,25 @@ do
     pbLabel.Position = UDim2.new(0,6,0,4)
     pbLabel.BackgroundTransparency = 1
     pbLabel.Font = Enum.Font.GothamSemibold; pbLabel.TextSize = 11
-    pbLabel.TextColor3 = THEME_TEXT
-    pbLabel.TextXAlignment = Enum.TextXAlignment.Left
+    pbLabel.TextColor3 = THEME_TEXT; pbLabel.TextXAlignment = Enum.TextXAlignment.Left
     pbLabel.Text = "Teleporting..."
     local pbTrack = Instance.new("Frame", pbWrapper)
     pbTrack.Size = UDim2.new(1,-12,0,12)
     pbTrack.Position = UDim2.new(0,6,0,24)
     pbTrack.BackgroundColor3 = Color3.fromRGB(30,30,40)
-    pbTrack.BorderSizePixel = 0
+    pbTrack.BorderSizePixel  = 0
     Instance.new("UICorner", pbTrack).CornerRadius = UDim.new(1,0)
     local pbFill = Instance.new("Frame", pbTrack)
     pbFill.Size = UDim2.new(0,0,1,0)
     pbFill.BackgroundColor3 = Color3.fromRGB(80,180,255)
-    pbFill.BorderSizePixel = 0
+    pbFill.BorderSizePixel  = 0
     Instance.new("UICorner", pbFill).CornerRadius = UDim.new(1,0)
     tpProgressContainer = pbWrapper
-    tpProgressFill = pbFill
-    tpProgressLabel = pbLabel
+    tpProgressFill      = pbFill
+    tpProgressLabel     = pbLabel
 end
 
+-- LASSO OVERLAY
 local lassoFrame = Instance.new("Frame", gui)
 lassoFrame.Name = "LassoRect"
 lassoFrame.BackgroundColor3 = Color3.fromRGB(60,120,200)
@@ -1087,13 +1139,13 @@ local lassoStartPos = nil
 local function updateLassoFrame(s, c)
     local minX = math.min(s.X, c.X); local minY = math.min(s.Y, c.Y)
     lassoFrame.Position = UDim2.new(0, minX, 0, minY)
-    lassoFrame.Size = UDim2.new(0, math.abs(c.X-s.X), 0, math.abs(c.Y-s.Y))
+    lassoFrame.Size     = UDim2.new(0, math.abs(c.X-s.X), 0, math.abs(c.Y-s.Y))
 end
 
 local camera = workspace.CurrentCamera
 local function selectItemsInLasso()
     if not lassoStartPos then return end
-    local cur = Vector2.new(player:GetMouse().X, player:GetMouse().Y)
+    local cur  = Vector2.new(player:GetMouse().X, player:GetMouse().Y)
     local minX = math.min(lassoStartPos.X, cur.X); local maxX = math.max(lassoStartPos.X, cur.X)
     local minY = math.min(lassoStartPos.Y, cur.Y); local maxY = math.max(lassoStartPos.Y, cur.Y)
     for _, obj in ipairs(workspace:GetDescendants()) do
@@ -1116,7 +1168,7 @@ mouse.Button1Down:Connect(function()
     mouseIsDragging = true
     if lassoTool then
         lassoStartPos = Vector2.new(mouse.X, mouse.Y)
-        lassoFrame.Size = UDim2.new(0,0,0,0)
+        lassoFrame.Size    = UDim2.new(0,0,0,0)
         lassoFrame.Visible = true
     elseif clickSelection or groupSelection then
         handleSelection(mouse.Target, false)
@@ -1166,7 +1218,7 @@ local statsConn2 = RunService.Heartbeat:Connect(function()
     local hum = char:FindFirstChild("Humanoid")
     if not hum then return end
     if hum.WalkSpeed ~= savedWalkSpeed then hum.WalkSpeed = savedWalkSpeed end
-    if hum.JumpPower ~= savedJumpPower then hum.JumpPower = savedJumpPower end
+    if hum.JumpPower  ~= savedJumpPower  then hum.JumpPower  = savedJumpPower  end
 end)
 table.insert(cleanupTasks, function()
     if statsConn2 then statsConn2:Disconnect(); statsConn2 = nil end
@@ -1309,7 +1361,7 @@ flyKeyBtn.MouseButton1Click:Connect(function()
     flyKeyBtn.BackgroundColor3 = Color3.fromRGB(60,100,60)
 end)
 
--- Fly hint label
+-- Fly hint
 local flyHint = Instance.new("TextLabel", playerPage)
 flyHint.Size = UDim2.new(1,-12,0,22)
 flyHint.BackgroundColor3 = Color3.fromRGB(18,18,24)
@@ -1321,7 +1373,7 @@ flyHint.Text = "  Press your Fly Key (Q) to toggle fly on/off"
 Instance.new("UICorner", flyHint).CornerRadius = UDim.new(0,6)
 Instance.new("UIPadding", flyHint).PaddingLeft = UDim.new(0,6)
 
-local isFlyEnabled = false
+local isFlyEnabled    = false
 local flyToggleEnabled = true
 local flyBV, flyBG, flyConn
 
@@ -1344,7 +1396,7 @@ local function startFly()
     local char = player.Character
     if not char then isFlyEnabled = false; return end
     local root = char:FindFirstChild("HumanoidRootPart")
-    local hum = char:FindFirstChild("Humanoid")
+    local hum  = char:FindFirstChild("Humanoid")
     if not root or not hum then isFlyEnabled = false; return end
     hum.PlatformStand = true
     flyBV = Instance.new("BodyVelocity", root)
@@ -1356,23 +1408,23 @@ local function startFly()
     flyConn = RunService.Heartbeat:Connect(function()
         if not (flyBV and flyBV.Parent and flyBG and flyBG.Parent) then return end
         local char = player.Character
-        local hum = char and char:FindFirstChild("Humanoid")
+        local hum  = char and char:FindFirstChild("Humanoid")
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not (hum and root) then return end
         local cam = workspace.CurrentCamera
-        local cf = cam.CFrame
+        local cf  = cam.CFrame
         local UIS = UserInputService
         local dir = Vector3.zero
         if UIS:IsKeyDown(Enum.KeyCode.W) then dir = dir + cf.LookVector end
         if UIS:IsKeyDown(Enum.KeyCode.S) then dir = dir - cf.LookVector end
         if UIS:IsKeyDown(Enum.KeyCode.A) then dir = dir - cf.RightVector end
         if UIS:IsKeyDown(Enum.KeyCode.D) then dir = dir + cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.Space)     then dir = dir + Vector3.new(0,1,0) end
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0,1,0) end
         hum.PlatformStand = true
-        flyBV.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
         flyBV.Velocity = dir.Magnitude > 0 and dir.Unit * flySpeed or Vector3.zero
-        flyBG.CFrame = cf
+        flyBG.CFrame   = cf
     end)
 end
 
