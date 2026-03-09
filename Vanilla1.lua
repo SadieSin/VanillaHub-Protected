@@ -779,23 +779,43 @@ local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 -- ════════════════════════════════════════════════════
 -- ITEM FILTER  (ported from Vanilla4 / Sorter)
 --
--- A model is "selectable" only if it is a genuine player-owned / draggable
--- item. Trees (TreeClass), land, ground, and static world objects are
--- explicitly excluded.  The check mirrors Vanilla4's isSortableItem().
+-- Strict whitelist — ONLY logs, sawn wood, gifts, and placed store items.
+--
+-- LT2 object fingerprints:
+--   Logs / sawn wood  →  has "TreeClass" StringValue  AND  has "Owner"
+--                        (a felled/sawn log has both; a living tree has
+--                         TreeClass but NO Owner, so it is excluded)
+--   Gifts             →  has "PurchasedBoxItemName" StringValue
+--   Placed items      →  has "ItemName" StringValue  AND  has "Owner"
+--                        (shop items the player placed in the world)
+--
+-- Anything that does not match one of these three fingerprints is rejected,
+-- so land, ground, trucks, the map, living trees, and all other world
+-- objects can never be selected.
 -- ════════════════════════════════════════════════════
 local function isSortableItem(model)
     if not model or not model:IsA("Model") then return false end
     if model == workspace then return false end
-    -- Must have at least one BasePart to interact with
-    local mp = model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
-    if not mp then return false end
-    -- Trees are NOT selectable
-    if model:FindFirstChild("TreeClass") then return false end
-    -- Must be a genuine owned/draggable/purchasable item
-    return model:FindFirstChild("Owner") ~= nil
-        or model:FindFirstChild("PurchasedBoxItemName") ~= nil
-        or model:FindFirstChild("DraggableItem") ~= nil
-        or model:FindFirstChild("ItemName") ~= nil
+    -- Must have a draggable BasePart
+    if not (model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")) then
+        return false
+    end
+
+    local hasOwner      = model:FindFirstChild("Owner")        ~= nil
+    local hasTreeClass  = model:FindFirstChild("TreeClass")    ~= nil
+    local hasItemName   = model:FindFirstChild("ItemName")     ~= nil
+    local hasGiftName   = model:FindFirstChild("PurchasedBoxItemName") ~= nil
+
+    -- Logs / sawn wood: TreeClass present AND owned (felled/cut, not a living tree)
+    if hasTreeClass and hasOwner then return true end
+
+    -- Gifts: PurchasedBoxItemName present
+    if hasGiftName then return true end
+
+    -- Placed store items: ItemName present AND owned
+    if hasItemName and hasOwner then return true end
+
+    return false
 end
 
 -- ════════════════════════════════════════════════════
