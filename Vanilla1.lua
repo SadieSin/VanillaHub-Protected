@@ -565,20 +565,27 @@ local function toggleGUI()
     guiOpen = not guiOpen
     isAnimatingGUI = true
     if guiOpen then
-        main.Visible = true
-        main.Size = UDim2.new(0,0,0,0)
+        wrapper.Visible = true
+        main.Visible    = true
+        wrapper.Size                = UDim2.new(0, 0, 0, 0)
+        wrapper.BackgroundTransparency = 1
+        main.Size                   = UDim2.new(0, 0, 0, 0)
         main.BackgroundTransparency = 1
-        local t = TweenService:Create(main, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0
-        })
+        local ti = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        TweenService:Create(wrapper, ti, {Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0}):Play()
+        local t = TweenService:Create(main, ti, {Size = UDim2.new(0,520,0,340), BackgroundTransparency = 0})
         t:Play()
         t.Completed:Connect(function() isAnimatingGUI = false end)
     else
-        local t = TweenService:Create(main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1
-        })
+        local ti = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        TweenService:Create(wrapper, ti, {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1}):Play()
+        local t = TweenService:Create(main, ti, {Size = UDim2.new(0,0,0,0), BackgroundTransparency = 1})
         t:Play()
-        t.Completed:Connect(function() main.Visible = false; isAnimatingGUI = false end)
+        t.Completed:Connect(function()
+            wrapper.Visible = false
+            main.Visible    = false
+            isAnimatingGUI  = false
+        end)
     end
 end
 
@@ -896,6 +903,7 @@ local function HandleClickSelection()
 end
 
 -- Group: select all models in PlayerModels sharing the same ItemName/category
+-- AND the same Owner, so "Ice Wood from player A" doesn't grab "Ice Wood from player B".
 local function HandleGroupSelection()
     local target = mouse.Target
     if not target then return end
@@ -904,17 +912,44 @@ local function HandleGroupSelection()
     local playerModels = workspace:FindFirstChild("PlayerModels")
     if not playerModels or model.Parent ~= playerModels then return end
 
-    local nameVal = model:FindFirstChild("ItemName")
+    -- Category: prefer ItemName StringValue, fall back to model name
+    local nameVal  = model:FindFirstChild("ItemName")
     local category = nameVal and nameVal.Value or model.Name
 
+    -- Owner: can be an ObjectValue (Player reference) or StringValue (player name)
+    local ownerVal = model:FindFirstChild("Owner")
+    local ownerKey -- a comparable string: UserId or the raw string value
+    if ownerVal then
+        if ownerVal:IsA("ObjectValue") and ownerVal.Value then
+            ownerKey = tostring(ownerVal.Value.UserId or ownerVal.Value)
+        elseif ownerVal:IsA("StringValue") then
+            ownerKey = ownerVal.Value
+        end
+    end
+
     for _, v in pairs(playerModels:GetChildren()) do
+        -- Category must match
         local vNameVal = v:FindFirstChild("ItemName")
         local vCat = vNameVal and vNameVal.Value or v.Name
-        if vCat == category then
-            if SELECT_MAIN and v:FindFirstChild("Main")               then SelectPart(v.Main) end
-            if SELECT_WOOD and v:FindFirstChild("WoodSection")        then SelectPart(v.WoodSection) end
-            if SELECT_BPS  and v:FindFirstChild("BuildDependentWood") then SelectPart(v.BuildDependentWood) end
+        if vCat ~= category then continue end
+
+        -- If the clicked model had an Owner, the candidate must match it
+        if ownerKey then
+            local vOwnerVal = v:FindFirstChild("Owner")
+            local vOwnerKey
+            if vOwnerVal then
+                if vOwnerVal:IsA("ObjectValue") and vOwnerVal.Value then
+                    vOwnerKey = tostring(vOwnerVal.Value.UserId or vOwnerVal.Value)
+                elseif vOwnerVal:IsA("StringValue") then
+                    vOwnerKey = vOwnerVal.Value
+                end
+            end
+            if vOwnerKey ~= ownerKey then continue end
         end
+
+        if SELECT_MAIN and v:FindFirstChild("Main")               then SelectPart(v.Main) end
+        if SELECT_WOOD and v:FindFirstChild("WoodSection")        then SelectPart(v.WoodSection) end
+        if SELECT_BPS  and v:FindFirstChild("BuildDependentWood") then SelectPart(v.BuildDependentWood) end
     end
 end
 
@@ -935,19 +970,27 @@ local lassoEnabled          = false
 local groupSelectionEnabled = false
 local lassoActive           = false
 
--- Lasso drag loop
-local function StartLasso()
+-- Lasso drag loop — origin is captured from the InputBegan position (passed in),
+-- so it is never affected by yields. Size is always positive (abs) so dragging
+-- in any direction works correctly.
+local function StartLasso(originX, originY)
     if lassoActive then return end
     lassoActive = true
-    lassoFrame.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+    lassoFrame.Position = UDim2.new(0, originX, 0, originY)
     lassoFrame.Size     = UDim2.new(0, 0, 0, 0)
     lassoFrame.Visible  = true
 
     while UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
         RunService.RenderStepped:Wait()
-        local ox = lassoFrame.Position.X.Offset
-        local oy = lassoFrame.Position.Y.Offset
-        lassoFrame.Size = UDim2.new(0, mouse.X - ox, 0, mouse.Y - oy)
+        local cx = mouse.X
+        local cy = mouse.Y
+        -- Always position at top-left corner of the drag rect, size is always positive
+        local x = math.min(originX, cx)
+        local y = math.min(originY, cy)
+        local w = math.abs(cx - originX)
+        local h = math.abs(cy - originY)
+        lassoFrame.Position = UDim2.new(0, x, 0, y)
+        lassoFrame.Size     = UDim2.new(0, w, 0, h)
 
         local playerModels = workspace:FindFirstChild("PlayerModels")
         if playerModels then
@@ -957,7 +1000,7 @@ local function StartLasso()
         end
     end
 
-    lassoFrame.Size    = UDim2.new(0, 1, 0, 1)
+    lassoFrame.Size    = UDim2.new(0, 0, 0, 0)
     lassoFrame.Visible = false
     lassoActive        = false
 end
@@ -977,16 +1020,33 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
     if not (clickSelectionEnabled or lassoEnabled or groupSelectionEnabled) then return end
 
+    -- Capture the exact mouse position at the moment of the click, before any yield
     local startX, startY = mouse.X, mouse.Y
-    RunService.RenderStepped:Wait()
-    local dx = math.abs(mouse.X - startX)
-    local dy = math.abs(mouse.Y - startY)
 
     if groupSelectionEnabled then
         HandleGroupSelection()
     elseif lassoEnabled then
-        if dx < 4 and dy < 4 then HandleClickSelection()
-        else task.spawn(StartLasso) end
+        -- Spin up a short wait to detect drag vs click without losing the origin
+        task.spawn(function()
+            local DRAG_THRESHOLD = 5
+            local elapsed = 0
+            local isDrag   = false
+            -- Poll up to ~150 ms to decide click vs drag
+            while elapsed < 0.15 and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                RunService.RenderStepped:Wait()
+                elapsed = elapsed + (1/60)
+                if math.abs(mouse.X - startX) >= DRAG_THRESHOLD
+                or math.abs(mouse.Y - startY) >= DRAG_THRESHOLD then
+                    isDrag = true
+                    break
+                end
+            end
+            if isDrag then
+                StartLasso(startX, startY)
+            else
+                HandleClickSelection()
+            end
+        end)
     elseif clickSelectionEnabled then
         HandleClickSelection()
     end
@@ -1060,24 +1120,77 @@ local function createItemToggle(text, defaultState, callback)
         }):Play()
         if callback then callback(toggled) end
     end)
-    return frame
+    local function setToggled(val)
+        if toggled == val then return end
+        toggled = val
+        TweenService:Create(tb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            BackgroundColor3 = toggled and Color3.fromRGB(60,180,60) or BTN_COLOR
+        }):Play()
+        TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+            Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
+        }):Play()
+        -- Note: callback is NOT called from setToggled to avoid infinite mutual-exclusion loops
+    end
+    return frame, setToggled
 end
 
 createSectionLabel("Selection Mode")
 
-createItemToggle("Click Selection", false, function(val)
-    clickSelectionEnabled = val
-    if val then lassoEnabled = false end
-end)
+local clickSelToggleSetFn = nil
+local lassoToggleSetFn    = nil
 
-createItemToggle("Lasso Tool", false, function(val)
-    lassoEnabled = val
-    if val then clickSelectionEnabled = false end
+local _, clickSelSet = createItemToggle("Click Selection", false, function(val)
+    clickSelectionEnabled = val
+    if val then
+        lassoEnabled = false
+        if lassoToggleSetFn then lassoToggleSetFn(false) end
+    end
 end)
+clickSelToggleSetFn = clickSelSet
+
+local _, lassoSet = createItemToggle("Lasso Tool", false, function(val)
+    lassoEnabled = val
+    if val then
+        clickSelectionEnabled = false
+        if clickSelToggleSetFn then clickSelToggleSetFn(false) end
+    end
+end)
+lassoToggleSetFn = lassoSet
 
 createItemToggle("Group Selection", false, function(val)
     groupSelectionEnabled = val
 end)
+
+createSep()
+createSectionLabel("Teleport Mode")
+
+-- Teleport mode: "group" teleports all items of one group before moving to the next.
+-- "random" ignores groups and teleports in a completely random order.
+-- Default is group teleport (matches the original sequential behaviour per model).
+local tpModeGroup  = true   -- Group Teleport on by default
+local tpModeRandom = false  -- Random Teleport off by default
+
+-- Mutual-exclusion helper for the two mode toggles
+local groupTpToggleSetFn  = nil
+local randomTpToggleSetFn = nil
+
+local groupTpFrame, groupTpSet = createItemToggle("Group Teleport", true, function(val)
+    tpModeGroup = val
+    if val then
+        tpModeRandom = false
+        if randomTpToggleSetFn then randomTpToggleSetFn(false) end
+    end
+end)
+groupTpToggleSetFn = function(v) tpModeGroup = v; groupTpSet(v) end
+
+local randomTpFrame, randomTpSet = createItemToggle("Random Teleport", false, function(val)
+    tpModeRandom = val
+    if val then
+        tpModeGroup = false
+        if groupTpToggleSetFn then groupTpToggleSetFn(false) end
+    end
+end)
+randomTpToggleSetFn = function(v) tpModeRandom = v; randomTpSet(v) end
 
 createSep()
 createSectionLabel("Item Teleport Destination")
@@ -1136,14 +1249,47 @@ createItemButton("Teleport Selected Items", function()
     isItemTeleporting = true
 
     task.spawn(function()
-        local queue = GetSelectedParts()
+        -- Build the ordered queue based on current teleport mode
+        local queue = {}
+
+        if tpModeRandom then
+            -- Completely random order
+            local parts = GetSelectedParts()
+            -- Fisher-Yates shuffle
+            for i = #parts, 2, -1 do
+                local j = math.random(1, i)
+                parts[i], parts[j] = parts[j], parts[i]
+            end
+            queue = parts
+
+        else
+            -- Group Teleport (default): finish every part in one group before next group
+            -- Groups are keyed by parent model
+            local groups = GetSelectionGroups()
+            -- Gather group keys in a stable order
+            local groupKeys = {}
+            for model in pairs(groups) do table.insert(groupKeys, model) end
+            -- Optional: shuffle group order so groups themselves arrive randomly
+            for i = #groupKeys, 2, -1 do
+                local j = math.random(1, i)
+                groupKeys[i], groupKeys[j] = groupKeys[j], groupKeys[i]
+            end
+            for _, model in ipairs(groupKeys) do
+                for _, part in ipairs(groups[model]) do
+                    table.insert(queue, part)
+                end
+            end
+        end
+
         local total = #queue
         local done  = 0
+
         if tpProgressContainer then
             tpProgressContainer.Visible = true
-            tpProgressFill.Size = UDim2.new(0, 0, 1, 0)
+            tpProgressFill.Size  = UDim2.new(0, 0, 1, 0)
             tpProgressLabel.Text = "Teleporting... 0 / " .. total
         end
+
         for _, part in ipairs(queue) do
             if not isItemTeleporting then break end
             if not (part and part.Parent) then done = done + 1; continue end
@@ -1171,7 +1317,9 @@ createItemButton("Teleport Selected Items", function()
                 tpProgressLabel.Text = "Teleporting... " .. done .. " / " .. total
             end
         end
+
         isItemTeleporting = false
+
         if tpProgressContainer and tpProgressContainer.Visible then
             TweenService:Create(tpProgressFill, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 1, 0)}):Play()
             tpProgressLabel.Text = "Done! " .. done .. " / " .. total .. " teleported"
@@ -1413,8 +1561,8 @@ Instance.new("UIPadding", flyHint).PaddingLeft = UDim.new(0,6)
 
 local isFlyEnabled     = false
 -- flyToggleEnabled: when FALSE the fly hotkey does nothing at all.
--- The "Disable Fly Hotkey" toggle below flips this flag.
-local flyToggleEnabled = true
+-- Starts as FALSE (hotkey disabled by default — user must turn it on).
+local flyToggleEnabled = false
 local flyBV, flyBG, flyConn
 
 local function stopFly()
@@ -1470,17 +1618,17 @@ end
 
 table.insert(cleanupTasks, stopFly)
 
+-- ── Fly toggle — sits directly under the Fly Key row ──────────────────────
+-- Label is simply "Fly". Default ON = hotkey enabled (toggle starts enabled).
+-- When turned off the hotkey is silenced; if mid-flight, landing happens immediately.
+createPToggle("Fly", true, function(val)
+    flyToggleEnabled = val
+    if _G.VH then _G.VH.flyToggleEnabled = flyToggleEnabled end
+    if not val and isFlyEnabled then stopFly() end
+end)
+
 createPSep()
 createPSection("Character")
-
--- ── Disable Fly Hotkey ─────────────────────────────────────────────────────
--- When toggled ON, the fly key (Q by default) is completely ignored.
--- If the player is currently flying when this is enabled, fly stops immediately.
-createPToggle("Disable Fly Hotkey", false, function(val)
-    flyToggleEnabled = not val   -- "Disable" = true  →  enabled = false
-    if _G.VH then _G.VH.flyToggleEnabled = flyToggleEnabled end
-    if val and isFlyEnabled then stopFly() end   -- land if mid-flight
-end)
 
 local noclipEnabled = false
 local noclipConn
@@ -1553,7 +1701,7 @@ _G.VH = {
     stopFly          = stopFly,
     startFly         = startFly,
     butter           = { running = false, thread = nil },
-    flyToggleEnabled = flyToggleEnabled,
+    flyToggleEnabled = flyToggleEnabled,  -- false by default; toggled by "Fly" switch
     isFlyEnabled     = false,
     currentFlyKey    = Enum.KeyCode.Q,
     waitingForFlyKey = false,
