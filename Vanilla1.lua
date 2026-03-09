@@ -797,13 +797,26 @@ local function getPlayerModels()
     return workspace:FindFirstChild("PlayerModels")
 end
 
--- Item name: prefer the ItemName StringValue, fall back to model.Name
+-- ── Name resolution ────────────────────────────────────────────────────────
+-- Priority:
+--   1. StringValue "ItemName" child  (LT2 standard for placed items)
+--   2. StringValue "Name" child      (some LT2 item variants)
+--   3. model.Name stripped of a leading "PlayerName's " prefix
+--      so "Beebo's Chop Saw" → "Chop Saw"
+-- This guarantees two models of the same type always return the same string
+-- regardless of whether their .Name contains an owner prefix.
 local function itemName(model)
     local iv = model:FindFirstChild("ItemName")
     if iv and iv:IsA("StringValue") and iv.Value ~= "" then
         return iv.Value
     end
-    return model.Name
+    local nv = model:FindFirstChild("Name")
+    if nv and nv:IsA("StringValue") and nv.Value ~= "" then
+        return nv.Value
+    end
+    -- Strip "PlayerName's " prefix if present
+    local stripped = string.match(model.Name, "^.-%'s%s+(.+)$")
+    return stripped or model.Name
 end
 
 -- ── Shared selection state ─────────────────────────────────────────────────
@@ -954,20 +967,45 @@ local function HandleGroupSelection()
     local clickedName  = itemName(model)
     local clickedOwner = resolveOwner(model)   -- nil = no owner found
 
+    -- Optional secondary discriminator: ItemType StringValue (LT2 uses this
+    -- on some items to distinguish variants that share the same ItemName).
+    local clickedType = nil
+    local itv = model:FindFirstChild("ItemType")
+    if itv and itv:IsA("StringValue") and itv.Value ~= "" then
+        clickedType = itv.Value
+    end
+
+    -- Debug: print what we resolved so you can verify in the executor console
+    print(string.format(
+        "[VH GroupSel] clicked: name=%q  owner=%s  type=%s",
+        clickedName,
+        tostring(clickedOwner),
+        tostring(clickedType)
+    ))
+
+    local count = 0
     for _, obj in ipairs(pm:GetChildren()) do
         if not obj:IsA("Model") then continue end
 
-        -- Item name must match exactly
+        -- 1. Item name must match
         if itemName(obj) ~= clickedName then continue end
 
-        -- Owner must match with strict nil-symmetry:
-        --   clicked has owner  → candidate must have the SAME owner key
-        --   clicked has no owner → candidate must also have no owner key
+        -- 2. Owner must match with strict nil-symmetry
         local objOwner = resolveOwner(obj)
         if clickedOwner ~= objOwner then continue end
 
+        -- 3. ItemType must match if the clicked model had one
+        if clickedType ~= nil then
+            local objItv = obj:FindFirstChild("ItemType")
+            local objType = (objItv and objItv:IsA("StringValue") and objItv.Value ~= "") and objItv.Value or nil
+            if objType ~= clickedType then continue end
+        end
+
         highlightModel(obj)
+        count = count + 1
     end
+
+    print(string.format("[VH GroupSel] selected %d matching item(s)", count))
 end
 
 -- ── Lasso selection ────────────────────────────────────────────────────────
