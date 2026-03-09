@@ -786,22 +786,26 @@ local function getPlayerModels()
     return workspace:FindFirstChild("PlayerModels")
 end
 
--- ── Sortable item guard (mirrors Vanilla4: blocks trees, land, ground) ─────
--- Only allows models that are owned/draggable items. Checks for:
---   • TreeClass child  → it's a tree, block it
---   • No BasePart/Main → not a real placeable, block it
---   • Must have at least one of: Owner, ItemName, DraggableItem,
---     PurchasedBoxItemName — otherwise it's land/terrain/map, block it
+-- ── Sortable item guard ────────────────────────────────────────────────────
+-- Blocks trees (TreeClass) and anything without a BasePart.
+-- Everything else inside PlayerModels is fair game — we do NOT require
+-- Owner/ItemName/etc on the root because many LT2 items store those on
+-- child parts or sub-models, which would cause false negatives.
 local function isSortableItem(model)
     if not model or not model:IsA("Model") then return false end
     if model == workspace then return false end
-    local mp = model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")
-    if not mp then return false end
+    -- Must have at least one BasePart somewhere
+    if not (model:FindFirstChild("Main") or model:FindFirstChildWhichIsA("BasePart")) then
+        return false
+    end
+    -- Block trees
     if model:FindFirstChild("TreeClass") then return false end
-    return model:FindFirstChild("Owner") ~= nil
-        or model:FindFirstChild("PurchasedBoxItemName") ~= nil
-        or model:FindFirstChild("DraggableItem") ~= nil
-        or model:FindFirstChild("ItemName") ~= nil
+    -- Block raw land plots (they have a "Lot" value but no draggable marker anywhere)
+    if model:FindFirstChild("Lot") and not model:FindFirstChild("Owner")
+    and not model:FindFirstChildWhichIsA("Tool") then
+        return false
+    end
+    return true
 end
 
 -- ── Name resolution ────────────────────────────────────────────────────────
