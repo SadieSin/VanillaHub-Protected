@@ -897,9 +897,8 @@ local function HandleClickSelection()
 end
 
 -- ── Group selection ────────────────────────────────────────────────────────
--- Clicks a model → reads its ItemName StringValue exactly → selects every
--- model inside PlayerModels that has the EXACT same ItemName StringValue.
--- Falls back to single-select if the clicked model has no ItemName.
+-- Clicks a model → selects every model in PlayerModels that shares the same
+-- itemName() result (ItemName StringValue if present, otherwise model.Name).
 local function HandleGroupSelection()
     local target = mouse.Target
     if not target then return end
@@ -914,38 +913,13 @@ local function HandleGroupSelection()
     end
     if not model then return end
 
-    -- Require an explicit ItemName StringValue for group matching.
-    -- If the clicked model has no ItemName (or it's blank), treat it as
-    -- ungroupable and just select that single model.
-    local clickedIV = model:FindFirstChild("ItemName")
-    local clickedItemName = (clickedIV and clickedIV:IsA("StringValue") and clickedIV.Value ~= "")
-                            and clickedIV.Value
-                            or nil
-
-    if not clickedItemName then
-        -- No ItemName — fall back to single-click selection only
-        highlightModel(model)
-        return
-    end
-
-    local clickedOwner = ownerKey(model)
+    local clickedName = itemName(model)   -- ItemName StringValue value OR model.Name
 
     for _, obj in ipairs(pm:GetChildren()) do
         if not obj:IsA("Model") then continue end
-
-        -- Must have an ItemName StringValue with the EXACT same value
-        local objIV = obj:FindFirstChild("ItemName")
-        local objItemName = (objIV and objIV:IsA("StringValue") and objIV.Value ~= "")
-                            and objIV.Value
-                            or nil
-        if objItemName ~= clickedItemName then continue end
-
-        -- Owner must match when both are known; skip the check if either is nil
-        if clickedOwner ~= nil and ownerKey(obj) ~= nil then
-            if ownerKey(obj) ~= clickedOwner then continue end
+        if itemName(obj) == clickedName then
+            highlightModel(obj)
         end
-
-        highlightModel(obj)
     end
 end
 
@@ -1044,9 +1018,19 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
     local startX, startY = mouse.X, mouse.Y
 
+    -- Click Selection and Group Selection fire immediately on click.
+    -- They can both be on at the same time — group runs after click so its
+    -- highlights layer on top of the single-item toggle.
+    if clickSelectionEnabled then
+        HandleClickSelection()
+    end
     if groupSelectionEnabled then
         HandleGroupSelection()
-    elseif lassoEnabled then
+    end
+
+    -- Lasso: wait briefly to distinguish a drag from a tap.
+    -- If the user taps (no drag), nothing extra happens (click/group already fired above).
+    if lassoEnabled then
         task.spawn(function()
             local t0 = tick()
             while tick() - t0 < 0.15
@@ -1058,10 +1042,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     return
                 end
             end
-            HandleClickSelection()   -- tap with no drag = click
+            -- Tap with no drag — click/group modes already handled it above, nothing to do.
         end)
-    elseif clickSelectionEnabled then
-        HandleClickSelection()
     end
 end)
 
@@ -1150,26 +1132,13 @@ end
 
 createSectionLabel("Selection Mode")
 
-local clickSelToggleSetFn = nil
-local lassoToggleSetFn    = nil
-
 local _, clickSelSet = createItemToggle("Click Selection", false, function(val)
     clickSelectionEnabled = val
-    if val then
-        lassoEnabled = false
-        if lassoToggleSetFn then lassoToggleSetFn(false) end
-    end
 end)
-clickSelToggleSetFn = clickSelSet
 
 local _, lassoSet = createItemToggle("Lasso Tool", false, function(val)
     lassoEnabled = val
-    if val then
-        clickSelectionEnabled = false
-        if clickSelToggleSetFn then clickSelToggleSetFn(false) end
-    end
 end)
-lassoToggleSetFn = lassoSet
 
 createItemToggle("Group Selection", false, function(val)
     groupSelectionEnabled = val
