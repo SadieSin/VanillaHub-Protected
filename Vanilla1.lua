@@ -779,102 +779,92 @@ local BTN_COLOR = Color3.fromRGB(45, 45, 50)
 local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 
 -- ════════════════════════════════════════════════════
--- SELECTION SYSTEM (LT2-aware, unified)
+-- SELECTION SYSTEM
 --
--- One shared table covers click, lasso, and group modes.
--- Group selection uses the isMoveableItem filter (same logic as
--- the original script) so trees, land, terrain etc. are never hit.
--- Lasso scans only on mouse-up (not per-frame) to avoid lag.
+-- All three modes (click, lasso, group) scan ONLY workspace.PlayerModels.
+-- That is the single container LT2 uses for every player-owned moveable
+-- object (logs, sawn wood, items, gifts). Trees, trucks, land, ground,
+-- and the map are never inside PlayerModels, so they can never be selected.
+--
+-- Shared state: selectedItems = { [Model] = SelectionBox }
+-- ClearAllSelection() wipes the whole table regardless of which mode
+-- added entries.
 -- ════════════════════════════════════════════════════
 local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
 
--- ── isMoveableItem: exact copy of the reference script's filter ───────────
-local STATIC_NAMES = {
-    Map=true, Terrain=true, Camera=true, Baseplate=true, Base=true,
-    Ground=true, Land=true, Island=true, Water=true, Tree=true,
-    Palm=true, Bush=true, Rock=true, Stump=true, Branch=true,
-    Log=true, PalmTree=true, CypressTree=true, SpruceTree=true,
-    ElmTree=true, ChestnutTree=true, CherryTree=true, OakTree=true,
-    BirchTree=true, Fence=true, Road=true, Path=true, River=true,
-    Cliff=true, Hill=true, Bridge=true,
-}
-local function isMoveableItem(model)
-    if not model:IsA("Model") then return false end
-    local mp = model.PrimaryPart
-               or model:FindFirstChild("Main")
-               or model:FindFirstChildWhichIsA("BasePart")
-    if not mp then return false end
-    if model == workspace then return false end
-    if STATIC_NAMES[model.Name] then return false end
-    if not model:FindFirstChild("Owner") and not model:FindFirstChild("ItemName") then return false end
-    return true
+-- Returns the PlayerModels folder, or nil if it doesn't exist yet
+local function getPlayerModels()
+    return workspace:FindFirstChild("PlayerModels")
 end
 
-local function getOwner(model)
+-- Owner key: a stable string we can compare across models
+local function ownerKey(model)
     local ov = model:FindFirstChild("Owner")
-    if ov then
-        if ov:IsA("ObjectValue") then return ov.Value
-        elseif ov:IsA("StringValue") then return ov.Value end
+    if not ov then return nil end
+    if ov:IsA("ObjectValue") and ov.Value then
+        return tostring(ov.Value.UserId)   -- Player UserId → "12345"
+    elseif ov:IsA("StringValue") then
+        return ov.Value                    -- plain name string
     end
     return nil
 end
 
-local function getItemCategory(model)
+-- Item name: prefer the ItemName StringValue, fall back to model.Name
+local function itemName(model)
     local iv = model:FindFirstChild("ItemName")
-    if iv and iv:IsA("StringValue") then return iv.Value end
+    if iv and iv:IsA("StringValue") and iv.Value ~= "" then
+        return iv.Value
+    end
     return model.Name
 end
 
--- ── Shared selection state — ONE table for all three modes ────────────────
--- [Model] = SelectionBox  (adorns the whole model, not a sub-part)
-local selectedItems = {}
+-- ── Shared selection state ─────────────────────────────────────────────────
+local selectedItems = {}   -- [Model] = SelectionBox
 
 local function highlightModel(model)
     if selectedItems[model] then return end
-    local hl         = Instance.new("SelectionBox")
-    hl.Color3        = SELECTION_COLOR
-    hl.LineThickness = 0.05
-    hl.Adornee       = model
-    hl.Parent        = model
-    selectedItems[model] = hl
+    local sb = Instance.new("SelectionBox")
+    sb.Color3        = SELECTION_COLOR
+    sb.LineThickness = 0.05
+    sb.Adornee       = model
+    sb.Parent        = model
+    selectedItems[model] = sb
 end
 
 local function unhighlightModel(model)
-    local hl = selectedItems[model]
-    if hl and hl.Parent then pcall(function() hl:Destroy() end) end
+    local sb = selectedItems[model]
+    if sb then pcall(function() sb:Destroy() end) end
     selectedItems[model] = nil
 end
 
 local function ClearAllSelection()
-    for model, hl in pairs(selectedItems) do
-        if hl and hl.Parent then pcall(function() hl:Destroy() end) end
+    for _, sb in pairs(selectedItems) do
+        pcall(function() sb:Destroy() end)
     end
     selectedItems = {}
 end
 
--- Returns a flat list of models (used by teleport)
 local function GetSelectedParts()
     local t = {}
     for model in pairs(selectedItems) do table.insert(t, model) end
     return t
 end
 
--- Returns groups keyed by ItemName+Owner string (used by group teleport mode)
 local function GetSelectionGroups()
     local groups = {}
     for model in pairs(selectedItems) do
-        local key = getItemCategory(model) .. "|" .. tostring(getOwner(model))
+        local key = itemName(model) .. "|" .. tostring(ownerKey(model))
         groups[key] = groups[key] or {}
         table.insert(groups[key], model)
     end
     return groups
 end
 
--- ── Helpers shared by click and lasso ─────────────────────────────────────
+-- Aliases used by teleport code
 local function SelectPart(model)   highlightModel(model)   end
 local function DeselectPart(model) unhighlightModel(model) end
 
--- ── Lasso overlay ──────────────────────────────────────────────────────────
+-- ── Lasso overlay frame ────────────────────────────────────────────────────
 local lassoFrame = Instance.new("Frame", gui)
 lassoFrame.Name                   = "LassoRect"
 lassoFrame.BackgroundColor3       = Color3.fromRGB(25, 117, 255)
@@ -888,63 +878,87 @@ local mouse  = player:GetMouse()
 local camera = workspace.CurrentCamera
 
 -- ── Click selection ────────────────────────────────────────────────────────
+-- Walks up from the clicked part to find its parent Model, then checks
+-- that parent Model is a direct child of PlayerModels (one level deep).
 local function HandleClickSelection()
     local target = mouse.Target
     if not target then return end
+    local pm = getPlayerModels()
+    if not pm then return end
+    -- The model we want is the direct child of PlayerModels
     local model = target:FindFirstAncestorOfClass("Model")
-    if not (model and isMoveableItem(model)) then return end
+    while model do
+        if model.Parent == pm then break end
+        model = model.Parent:IsA("Model") and model.Parent or nil
+    end
+    if not model then return end
+    -- Toggle
     if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
 end
 
--- ── Group selection (reference script logic) ──────────────────────────────
+-- ── Group selection ────────────────────────────────────────────────────────
+-- Clicks a model → reads its ItemName and Owner → selects every model
+-- inside PlayerModels that shares BOTH values exactly.
 local function HandleGroupSelection()
     local target = mouse.Target
     if not target then return end
+    local pm = getPlayerModels()
+    if not pm then return end
+
+    -- Find the direct-child-of-PlayerModels model that was clicked
     local model = target:FindFirstAncestorOfClass("Model")
-    if not (model and isMoveableItem(model)) then return end
+    while model do
+        if model.Parent == pm then break end
+        model = model.Parent:IsA("Model") and model.Parent or nil
+    end
+    if not model then return end
 
-    local ownerVal = getOwner(model)
-    local cat      = getItemCategory(model)
+    local clickedName  = itemName(model)
+    local clickedOwner = ownerKey(model)   -- may be nil if no Owner value
 
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and isMoveableItem(obj) then
-            if getItemCategory(obj) == cat then
-                local objOwner   = getOwner(obj)
-                local ownerMatch = true
-                if ownerVal ~= nil and objOwner ~= nil then
-                    ownerMatch = tostring(ownerVal) == tostring(objOwner)
-                end
-                if ownerMatch then highlightModel(obj) end
+    for _, obj in ipairs(pm:GetChildren()) do
+        if obj:IsA("Model") then
+            -- Name must match
+            if itemName(obj) ~= clickedName then continue end
+            -- Owner must match (both nil = no owner info, still match)
+            local objOwner = ownerKey(obj)
+            if clickedOwner ~= nil and objOwner ~= nil then
+                if clickedOwner ~= objOwner then continue end
             end
+            highlightModel(obj)
         end
     end
 end
 
--- ── Lasso: draw rect while dragging, scan ONCE on release ─────────────────
--- Scanning only on release (not per-frame) eliminates the lag entirely.
-local lassoActive = false
-local lassoOriginX, lassoOriginY = 0, 0
+-- ── Lasso selection ────────────────────────────────────────────────────────
+-- Rectangle is drawn per-frame (visual only, no scanning).
+-- A single scan of PlayerModels happens once when the mouse is released.
+local lassoActive   = false
+local lassoOriginX  = 0
+local lassoOriginY  = 0
+local lassoRenderConn
 
 local function FinaliseLasso()
-    -- Build the definitive rect from the frame's current position/size
-    local ax = lassoFrame.AbsolutePosition.X
-    local ay = lassoFrame.AbsolutePosition.Y
-    local bx = ax + lassoFrame.AbsoluteSize.X
-    local by = ay + lassoFrame.AbsoluteSize.Y
-    local minX, maxX = math.min(ax,bx), math.max(ax,bx)
-    local minY, maxY = math.min(ay,by), math.max(ay,by)
+    local ax   = lassoFrame.AbsolutePosition.X
+    local ay   = lassoFrame.AbsolutePosition.Y
+    local minX = math.min(ax, ax + lassoFrame.AbsoluteSize.X)
+    local maxX = math.max(ax, ax + lassoFrame.AbsoluteSize.X)
+    local minY = math.min(ay, ay + lassoFrame.AbsoluteSize.Y)
+    local maxY = math.max(ay, ay + lassoFrame.AbsoluteSize.Y)
 
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and isMoveableItem(obj) then
-            local mp = obj.PrimaryPart
-                       or obj:FindFirstChild("Main")
-                       or obj:FindFirstChildWhichIsA("BasePart")
-            if mp then
-                local sp, onScreen = camera:WorldToScreenPoint(mp.Position)
-                if onScreen and sp.X >= minX and sp.X <= maxX
-                           and sp.Y >= minY and sp.Y <= maxY then
-                    highlightModel(obj)
-                end
+    local pm = getPlayerModels()
+    if pm then
+        for _, obj in ipairs(pm:GetChildren()) do
+            if not obj:IsA("Model") then continue end
+            -- Use PrimaryPart → "Main" → first BasePart as the representative point
+            local rep = obj.PrimaryPart
+                     or obj:FindFirstChild("Main")
+                     or obj:FindFirstChildWhichIsA("BasePart")
+            if not rep then continue end
+            local sp, onScreen = camera:WorldToScreenPoint(rep.Position)
+            if onScreen and sp.X >= minX and sp.X <= maxX
+                        and sp.Y >= minY and sp.Y <= maxY then
+                highlightModel(obj)
             end
         end
     end
@@ -954,42 +968,38 @@ local function FinaliseLasso()
     lassoActive        = false
 end
 
--- Per-frame: only update the rectangle visuals, no scanning
-local lassoRenderConn
 local function StartLasso(originX, originY)
     if lassoActive then return end
-    lassoActive    = true
-    lassoOriginX   = originX
-    lassoOriginY   = originY
+    lassoActive   = true
+    lassoOriginX  = originX
+    lassoOriginY  = originY
     lassoFrame.Position = UDim2.new(0, originX, 0, originY)
     lassoFrame.Size     = UDim2.new(0, 0, 0, 0)
     lassoFrame.Visible  = true
 
+    -- Only update the visual rect each frame — no world scanning here
     lassoRenderConn = RunService.RenderStepped:Connect(function()
         if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-            -- Mouse released — finalise and disconnect
             lassoRenderConn:Disconnect()
             lassoRenderConn = nil
             FinaliseLasso()
             return
         end
-        local cx = mouse.X
-        local cy = mouse.Y
-        local x  = math.min(lassoOriginX, cx)
-        local y  = math.min(lassoOriginY, cy)
-        local w  = math.abs(cx - lassoOriginX)
-        local h  = math.abs(cy - lassoOriginY)
+        local x = math.min(lassoOriginX, mouse.X)
+        local y = math.min(lassoOriginY, mouse.Y)
+        local w = math.abs(mouse.X - lassoOriginX)
+        local h = math.abs(mouse.Y - lassoOriginY)
         lassoFrame.Position = UDim2.new(0, x, 0, y)
         lassoFrame.Size     = UDim2.new(0, w, 0, h)
     end)
 end
 
--- ── Ctrl+A ─────────────────────────────────────────────────────────────────
+-- ── Ctrl+A: select everything in PlayerModels ──────────────────────────────
 local function SelectAllItems()
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and isMoveableItem(obj) then
-            highlightModel(obj)
-        end
+    local pm = getPlayerModels()
+    if not pm then return end
+    for _, obj in ipairs(pm:GetChildren()) do
+        if obj:IsA("Model") then highlightModel(obj) end
     end
 end
 
@@ -1019,20 +1029,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         HandleGroupSelection()
     elseif lassoEnabled then
         task.spawn(function()
-            local DRAG_THRESHOLD = 5
             local t0 = tick()
-            -- Wait up to 150 ms to detect drag vs tap
             while tick() - t0 < 0.15
             and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
                 RunService.RenderStepped:Wait()
-                if math.abs(mouse.X - startX) >= DRAG_THRESHOLD
-                or math.abs(mouse.Y - startY) >= DRAG_THRESHOLD then
+                if math.abs(mouse.X - startX) >= 5
+                or math.abs(mouse.Y - startY) >= 5 then
                     StartLasso(startX, startY)
                     return
                 end
             end
-            -- No significant drag — treat as click
-            HandleClickSelection()
+            HandleClickSelection()   -- tap with no drag = click
         end)
     elseif clickSelectionEnabled then
         HandleClickSelection()
