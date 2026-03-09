@@ -781,14 +781,14 @@ local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 -- ════════════════════════════════════════════════════
 -- SELECTION SYSTEM
 --
--- Two modes: Click and Lasso.
--- Group Selection has been REMOVED — clicking a model selects ONLY that
--- model. No scanning of PlayerModels for matching names/owners happens.
---
--- Ctrl+A selects every model in PlayerModels.
--- Escape clears all selection.
+-- All three modes (click, lasso, group) scan ONLY workspace.PlayerModels.
+-- That is the single container LT2 uses for every player-owned moveable
+-- object (logs, sawn wood, items, gifts). Trees, trucks, land, ground,
+-- and the map are never inside PlayerModels, so they can never be selected.
 --
 -- Shared state: selectedItems = { [Model] = SelectionBox }
+-- ClearAllSelection() wipes the whole table regardless of which mode
+-- added entries.
 -- ════════════════════════════════════════════════════
 local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
 
@@ -798,25 +798,12 @@ local function getPlayerModels()
 end
 
 -- Item name: prefer the ItemName StringValue, fall back to model.Name
--- (kept for use by GetSelectionGroups which is used by teleport ordering)
 local function itemName(model)
     local iv = model:FindFirstChild("ItemName")
     if iv and iv:IsA("StringValue") and iv.Value ~= "" then
         return iv.Value
     end
     return model.Name
-end
-
--- Owner key: used only by GetSelectionGroups for teleport ordering
-local function ownerKey(model)
-    local ov = model:FindFirstChild("Owner")
-    if not ov then return nil end
-    if ov:IsA("ObjectValue") and ov.Value then
-        return tostring(ov.Value.UserId)
-    elseif ov:IsA("StringValue") then
-        return ov.Value
-    end
-    return nil
 end
 
 -- ── Shared selection state ─────────────────────────────────────────────────
@@ -851,11 +838,19 @@ local function GetSelectedParts()
     return t
 end
 
--- Groups are used only by the teleport queue ordering logic — not for auto-selection
 local function GetSelectionGroups()
     local groups = {}
     for model in pairs(selectedItems) do
-        local key = itemName(model) .. "|" .. tostring(ownerKey(model))
+        local key = itemName(model) .. "|" .. tostring(
+            (function()
+                local ov = model:FindFirstChild("Owner")
+                if ov then
+                    if ov:IsA("ObjectValue") and ov.Value then return tostring(ov.Value.UserId) end
+                    if ov:IsA("StringValue") then return ov.Value end
+                end
+                return "nil"
+            end)()
+        )
         groups[key] = groups[key] or {}
         table.insert(groups[key], model)
     end
@@ -880,23 +875,99 @@ local mouse  = player:GetMouse()
 local camera = workspace.CurrentCamera
 
 -- ── Click selection ────────────────────────────────────────────────────────
--- Walks up from the clicked part to find its parent Model that is a direct
--- child of PlayerModels. Toggles selection of that single model only.
--- No scanning of other models is performed.
 local function HandleClickSelection()
     local target = mouse.Target
     if not target then return end
     local pm = getPlayerModels()
     if not pm then return end
-    -- The model we want is the direct child of PlayerModels
     local model = target:FindFirstAncestorOfClass("Model")
     while model do
         if model.Parent == pm then break end
-        model = model.Parent:IsA("Model") and model.Parent or nil
+        local p = model.Parent
+        model = (p and p:IsA("Model")) and p or nil
     end
     if not model then return end
-    -- Toggle selection of this single model
     if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
+end
+
+-- ════════════════════════════════════════════════════
+-- GROUP SELECTION  (fixed)
+--
+-- Resolves the owner of a model using four different property patterns
+-- that LT2 uses across different item types, plus a model-name heuristic.
+--
+-- Owner resolution order:
+--   1. ObjectValue  "Owner"     → Player instance → "uid:<UserId>"
+--   2. StringValue  "Owner"     → plain name      → "str:<name>"
+--   3. IntValue     "OwnerId"   → UserId number   → "uid:<id>"
+--   4. StringValue  "OwnerName" → display/username → "str:<name>"
+--   5. Model name heuristic:  "PlayerName's ItemName" → "nameparse:<PlayerName>"
+--
+-- Nil-symmetry rule:
+--   • clicked HAS an owner  → candidate must have the SAME owner key
+--   • clicked has NO owner  → candidate must ALSO have no owner key
+-- This prevents accidentally grabbing another player's identically-named items.
+-- ════════════════════════════════════════════════════
+local function resolveOwner(model)
+    -- 1. ObjectValue "Owner"
+    local ov = model:FindFirstChild("Owner")
+    if ov then
+        if ov:IsA("ObjectValue") and ov.Value then
+            return "uid:" .. tostring(ov.Value.UserId)
+        elseif ov:IsA("StringValue") and ov.Value ~= "" then
+            return "str:" .. ov.Value
+        end
+    end
+    -- 2. IntValue "OwnerId"
+    local oid = model:FindFirstChild("OwnerId")
+    if oid and oid:IsA("IntValue") then
+        return "uid:" .. tostring(oid.Value)
+    end
+    -- 3. StringValue "OwnerName"
+    local on = model:FindFirstChild("OwnerName")
+    if on and on:IsA("StringValue") and on.Value ~= "" then
+        return "str:" .. on.Value
+    end
+    -- 4. Model name heuristic: "PlayerName's ItemName"
+    local namePart = string.match(model.Name, "^(.-)%'s%s")
+    if namePart and namePart ~= "" then
+        return "nameparse:" .. namePart
+    end
+    return nil   -- genuinely unowned / unknown
+end
+
+local function HandleGroupSelection()
+    local target = mouse.Target
+    if not target then return end
+    local pm = getPlayerModels()
+    if not pm then return end
+
+    -- Walk up to the direct child of PlayerModels that was clicked
+    local model = target:FindFirstAncestorOfClass("Model")
+    while model do
+        if model.Parent == pm then break end
+        local p = model.Parent
+        model = (p and p:IsA("Model")) and p or nil
+    end
+    if not model then return end
+
+    local clickedName  = itemName(model)
+    local clickedOwner = resolveOwner(model)   -- nil = no owner found
+
+    for _, obj in ipairs(pm:GetChildren()) do
+        if not obj:IsA("Model") then continue end
+
+        -- Item name must match exactly
+        if itemName(obj) ~= clickedName then continue end
+
+        -- Owner must match with strict nil-symmetry:
+        --   clicked has owner  → candidate must have the SAME owner key
+        --   clicked has no owner → candidate must also have no owner key
+        local objOwner = resolveOwner(obj)
+        if clickedOwner ~= objOwner then continue end
+
+        highlightModel(obj)
+    end
 end
 
 -- ── Lasso selection ────────────────────────────────────────────────────────
@@ -971,7 +1042,7 @@ end
 -- ── Mode flags ─────────────────────────────────────────────────────────────
 local clickSelectionEnabled = false
 local lassoEnabled          = false
--- NOTE: groupSelectionEnabled has been removed entirely.
+local groupSelectionEnabled = false
 
 -- ── Input wiring ───────────────────────────────────────────────────────────
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -986,11 +1057,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-    if not (clickSelectionEnabled or lassoEnabled) then return end
+    if not (clickSelectionEnabled or lassoEnabled or groupSelectionEnabled) then return end
 
     local startX, startY = mouse.X, mouse.Y
 
-    if lassoEnabled then
+    if groupSelectionEnabled then
+        HandleGroupSelection()
+    elseif lassoEnabled then
         task.spawn(function()
             local t0 = tick()
             while tick() - t0 < 0.15
@@ -1002,7 +1075,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     return
                 end
             end
-            HandleClickSelection()   -- tap with no drag = click
+            HandleClickSelection()
         end)
     elseif clickSelectionEnabled then
         HandleClickSelection()
@@ -1091,9 +1164,6 @@ local function createItemToggle(text, defaultState, callback)
     return frame, setToggled
 end
 
--- ── Selection Mode section ─────────────────────────────────────────────────
--- Only two modes now: Click Selection and Lasso Tool.
--- Group Selection has been removed entirely.
 createSectionLabel("Selection Mode")
 
 local clickSelToggleSetFn = nil
@@ -1116,6 +1186,10 @@ local _, lassoSet = createItemToggle("Lasso Tool", false, function(val)
     end
 end)
 lassoToggleSetFn = lassoSet
+
+createItemToggle("Group Selection", false, function(val)
+    groupSelectionEnabled = val
+end)
 
 createSep()
 createSectionLabel("Teleport Mode")
@@ -1211,7 +1285,6 @@ createItemButton("Teleport Selected Items", function()
             end
             queue = models
         else
-            -- Group Teleport: order by item-type+owner group, but does NOT auto-select anything
             local groups = GetSelectionGroups()
             local groupKeys = {}
             for k in pairs(groups) do table.insert(groupKeys, k) end
