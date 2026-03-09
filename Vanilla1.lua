@@ -250,7 +250,7 @@ Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
 
 -- ════════════════════════════════════════════════════
 -- CONFIRM CLOSE DIALOG
--- FIX: parented to gui (root ScreenGui), NOT main.
+-- Parented to gui (root ScreenGui), NOT main.
 -- main has ClipsDescendants=true which was hiding the dialog.
 -- ════════════════════════════════════════════════════
 local function showConfirmClose()
@@ -781,14 +781,14 @@ local BTN_HOVER = Color3.fromRGB(70, 70, 80)
 -- ════════════════════════════════════════════════════
 -- SELECTION SYSTEM
 --
--- All three modes (click, lasso, group) scan ONLY workspace.PlayerModels.
--- That is the single container LT2 uses for every player-owned moveable
--- object (logs, sawn wood, items, gifts). Trees, trucks, land, ground,
--- and the map are never inside PlayerModels, so they can never be selected.
+-- Two modes: Click and Lasso.
+-- Group Selection has been REMOVED — clicking a model selects ONLY that
+-- model. No scanning of PlayerModels for matching names/owners happens.
+--
+-- Ctrl+A selects every model in PlayerModels.
+-- Escape clears all selection.
 --
 -- Shared state: selectedItems = { [Model] = SelectionBox }
--- ClearAllSelection() wipes the whole table regardless of which mode
--- added entries.
 -- ════════════════════════════════════════════════════
 local SELECTION_COLOR = Color3.fromRGB(0, 172, 240)
 
@@ -797,25 +797,26 @@ local function getPlayerModels()
     return workspace:FindFirstChild("PlayerModels")
 end
 
--- Owner key: a stable string we can compare across models
-local function ownerKey(model)
-    local ov = model:FindFirstChild("Owner")
-    if not ov then return nil end
-    if ov:IsA("ObjectValue") and ov.Value then
-        return tostring(ov.Value.UserId)   -- Player UserId → "12345"
-    elseif ov:IsA("StringValue") then
-        return ov.Value                    -- plain name string
-    end
-    return nil
-end
-
 -- Item name: prefer the ItemName StringValue, fall back to model.Name
+-- (kept for use by GetSelectionGroups which is used by teleport ordering)
 local function itemName(model)
     local iv = model:FindFirstChild("ItemName")
     if iv and iv:IsA("StringValue") and iv.Value ~= "" then
         return iv.Value
     end
     return model.Name
+end
+
+-- Owner key: used only by GetSelectionGroups for teleport ordering
+local function ownerKey(model)
+    local ov = model:FindFirstChild("Owner")
+    if not ov then return nil end
+    if ov:IsA("ObjectValue") and ov.Value then
+        return tostring(ov.Value.UserId)
+    elseif ov:IsA("StringValue") then
+        return ov.Value
+    end
+    return nil
 end
 
 -- ── Shared selection state ─────────────────────────────────────────────────
@@ -850,6 +851,7 @@ local function GetSelectedParts()
     return t
 end
 
+-- Groups are used only by the teleport queue ordering logic — not for auto-selection
 local function GetSelectionGroups()
     local groups = {}
     for model in pairs(selectedItems) do
@@ -878,8 +880,9 @@ local mouse  = player:GetMouse()
 local camera = workspace.CurrentCamera
 
 -- ── Click selection ────────────────────────────────────────────────────────
--- Walks up from the clicked part to find its parent Model, then checks
--- that parent Model is a direct child of PlayerModels (one level deep).
+-- Walks up from the clicked part to find its parent Model that is a direct
+-- child of PlayerModels. Toggles selection of that single model only.
+-- No scanning of other models is performed.
 local function HandleClickSelection()
     local target = mouse.Target
     if not target then return end
@@ -892,40 +895,11 @@ local function HandleClickSelection()
         model = model.Parent:IsA("Model") and model.Parent or nil
     end
     if not model then return end
-    -- Toggle
+    -- Toggle selection of this single model
     if selectedItems[model] then unhighlightModel(model) else highlightModel(model) end
 end
 
--- ── Group selection ────────────────────────────────────────────────────────
--- Clicks a model → selects every model in PlayerModels that shares the same
--- itemName() result (ItemName StringValue if present, otherwise model.Name).
-local function HandleGroupSelection()
-    local target = mouse.Target
-    if not target then return end
-    local pm = getPlayerModels()
-    if not pm then return end
-
-    -- Find the direct-child-of-PlayerModels model that was clicked
-    local model = target:FindFirstAncestorOfClass("Model")
-    while model do
-        if model.Parent == pm then break end
-        model = model.Parent:IsA("Model") and model.Parent or nil
-    end
-    if not model then return end
-
-    local clickedName = itemName(model)   -- ItemName StringValue value OR model.Name
-
-    for _, obj in ipairs(pm:GetChildren()) do
-        if not obj:IsA("Model") then continue end
-        if itemName(obj) == clickedName then
-            highlightModel(obj)
-        end
-    end
-end
-
 -- ── Lasso selection ────────────────────────────────────────────────────────
--- Rectangle is drawn per-frame (visual only, no scanning).
--- A single scan of PlayerModels happens once when the mouse is released.
 local lassoActive   = false
 local lassoOriginX  = 0
 local lassoOriginY  = 0
@@ -943,7 +917,6 @@ local function FinaliseLasso()
     if pm then
         for _, obj in ipairs(pm:GetChildren()) do
             if not obj:IsA("Model") then continue end
-            -- Use PrimaryPart → "Main" → first BasePart as the representative point
             local rep = obj.PrimaryPart
                      or obj:FindFirstChild("Main")
                      or obj:FindFirstChildWhichIsA("BasePart")
@@ -970,7 +943,6 @@ local function StartLasso(originX, originY)
     lassoFrame.Size     = UDim2.new(0, 0, 0, 0)
     lassoFrame.Visible  = true
 
-    -- Only update the visual rect each frame — no world scanning here
     lassoRenderConn = RunService.RenderStepped:Connect(function()
         if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
             lassoRenderConn:Disconnect()
@@ -999,7 +971,7 @@ end
 -- ── Mode flags ─────────────────────────────────────────────────────────────
 local clickSelectionEnabled = false
 local lassoEnabled          = false
-local groupSelectionEnabled = false
+-- NOTE: groupSelectionEnabled has been removed entirely.
 
 -- ── Input wiring ───────────────────────────────────────────────────────────
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -1014,22 +986,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 
     if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-    if not (clickSelectionEnabled or lassoEnabled or groupSelectionEnabled) then return end
+    if not (clickSelectionEnabled or lassoEnabled) then return end
 
     local startX, startY = mouse.X, mouse.Y
 
-    -- Click Selection and Group Selection fire immediately on click.
-    -- They can both be on at the same time — group runs after click so its
-    -- highlights layer on top of the single-item toggle.
-    if clickSelectionEnabled then
-        HandleClickSelection()
-    end
-    if groupSelectionEnabled then
-        HandleGroupSelection()
-    end
-
-    -- Lasso: wait briefly to distinguish a drag from a tap.
-    -- If the user taps (no drag), nothing extra happens (click/group already fired above).
     if lassoEnabled then
         task.spawn(function()
             local t0 = tick()
@@ -1042,8 +1002,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     return
                 end
             end
-            -- Tap with no drag — click/group modes already handled it above, nothing to do.
+            HandleClickSelection()   -- tap with no drag = click
         end)
+    elseif clickSelectionEnabled then
+        HandleClickSelection()
     end
 end)
 
@@ -1125,35 +1087,42 @@ local function createItemToggle(text, defaultState, callback)
         TweenService:Create(circle, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
             Position = UDim2.new(0, toggled and 18 or 2, 0.5, -7)
         }):Play()
-        -- Note: callback is NOT called from setToggled to avoid infinite mutual-exclusion loops
     end
     return frame, setToggled
 end
 
+-- ── Selection Mode section ─────────────────────────────────────────────────
+-- Only two modes now: Click Selection and Lasso Tool.
+-- Group Selection has been removed entirely.
 createSectionLabel("Selection Mode")
+
+local clickSelToggleSetFn = nil
+local lassoToggleSetFn    = nil
 
 local _, clickSelSet = createItemToggle("Click Selection", false, function(val)
     clickSelectionEnabled = val
+    if val then
+        lassoEnabled = false
+        if lassoToggleSetFn then lassoToggleSetFn(false) end
+    end
 end)
+clickSelToggleSetFn = clickSelSet
 
 local _, lassoSet = createItemToggle("Lasso Tool", false, function(val)
     lassoEnabled = val
+    if val then
+        clickSelectionEnabled = false
+        if clickSelToggleSetFn then clickSelToggleSetFn(false) end
+    end
 end)
-
-createItemToggle("Group Selection", false, function(val)
-    groupSelectionEnabled = val
-end)
+lassoToggleSetFn = lassoSet
 
 createSep()
 createSectionLabel("Teleport Mode")
 
--- Teleport mode: "group" teleports all items of one group before moving to the next.
--- "random" ignores groups and teleports in a completely random order.
--- Default is group teleport (matches the original sequential behaviour per model).
-local tpModeGroup  = true   -- Group Teleport on by default
-local tpModeRandom = false  -- Random Teleport off by default
+local tpModeGroup  = true
+local tpModeRandom = false
 
--- Mutual-exclusion helper for the two mode toggles
 local groupTpToggleSetFn  = nil
 local randomTpToggleSetFn = nil
 
@@ -1232,21 +1201,18 @@ createItemButton("Teleport Selected Items", function()
     isItemTeleporting = true
 
     task.spawn(function()
-        -- Build the ordered queue based on current teleport mode
-        -- Each entry is a Model (not a sub-part)
         local queue = {}
 
         if tpModeRandom then
-            -- Completely random order
-            local models = GetSelectedParts()   -- returns models
+            local models = GetSelectedParts()
             for i = #models, 2, -1 do
                 local j = math.random(1, i)
                 models[i], models[j] = models[j], models[i]
             end
             queue = models
         else
-            -- Group Teleport: finish all models in one category-owner group first
-            local groups = GetSelectionGroups()   -- {key → {models}}
+            -- Group Teleport: order by item-type+owner group, but does NOT auto-select anything
+            local groups = GetSelectionGroups()
             local groupKeys = {}
             for k in pairs(groups) do table.insert(groupKeys, k) end
             for i = #groupKeys, 2, -1 do
@@ -1273,7 +1239,6 @@ createItemButton("Teleport Selected Items", function()
             if not isItemTeleporting then break end
             if not (model and model.Parent) then done = done + 1; continue end
 
-            -- Find the representative part for CFrame operations
             local part = model.PrimaryPart
                          or model:FindFirstChild("Main")
                          or model:FindFirstChildWhichIsA("BasePart")
@@ -1548,8 +1513,6 @@ Instance.new("UICorner", flyHint).CornerRadius = UDim.new(0,6)
 Instance.new("UIPadding", flyHint).PaddingLeft = UDim.new(0,6)
 
 local isFlyEnabled     = false
--- flyToggleEnabled: when FALSE the fly hotkey does nothing at all.
--- Starts as FALSE (hotkey disabled by default — user must turn it on).
 local flyToggleEnabled = false
 local flyBV, flyBG, flyConn
 
@@ -1606,9 +1569,6 @@ end
 
 table.insert(cleanupTasks, stopFly)
 
--- ── Fly toggle — sits directly under the Fly Key row ──────────────────────
--- Label is simply "Fly". Default ON = hotkey enabled (toggle starts enabled).
--- When turned off the hotkey is silenced; if mid-flight, landing happens immediately.
 createPToggle("Fly", true, function(val)
     flyToggleEnabled = val
     if _G.VH then _G.VH.flyToggleEnabled = flyToggleEnabled end
@@ -1689,7 +1649,7 @@ _G.VH = {
     stopFly          = stopFly,
     startFly         = startFly,
     butter           = { running = false, thread = nil },
-    flyToggleEnabled = flyToggleEnabled,  -- false by default; toggled by "Fly" switch
+    flyToggleEnabled = flyToggleEnabled,
     isFlyEnabled     = false,
     currentFlyKey    = Enum.KeyCode.Q,
     waitingForFlyKey = false,
